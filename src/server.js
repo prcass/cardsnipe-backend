@@ -9,6 +9,7 @@ import { Server } from 'socket.io';
 import { EbayClient } from './services/ebay.js';
 import { PriceService } from './services/pricing.js';
 import { db } from './db/index.js';
+import crypto from 'crypto';
 
 const app = express();
 const httpServer = createServer(app);
@@ -176,6 +177,31 @@ app.delete('/api/clear-data', async (req, res) => {
     console.error('Error clearing data:', error);
     res.status(500).json({ success: false, error: error.message });
   }
+});
+
+
+// ============================================
+// EBAY MARKETPLACE ACCOUNT DELETION WEBHOOK
+// ============================================
+
+const EBAY_VERIFICATION_TOKEN = process.env.EBAY_VERIFICATION_TOKEN || 'cardsnipe_verify_2024';
+
+// GET - eBay challenge verification
+app.get('/api/ebay/deletion', (req, res) => {
+  const challengeCode = req.query.challenge_code;
+  if (!challengeCode) {
+    return res.status(400).json({ error: 'Missing challenge_code' });
+  }
+  const endpoint = process.env.EBAY_WEBHOOK_URL || 'https://' + req.get('host') + '/api/ebay/deletion';
+  const hash = crypto.createHash('sha256').update(challengeCode + EBAY_VERIFICATION_TOKEN + endpoint).digest('hex');
+  console.log('eBay verification challenge received');
+  res.json({ challengeResponse: hash });
+});
+
+// POST - Receive deletion notifications
+app.post('/api/ebay/deletion', (req, res) => {
+  console.log('eBay deletion notification:', JSON.stringify(req.body));
+  res.status(200).json({ success: true });
 });
 
 // Stats endpoint
