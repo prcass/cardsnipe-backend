@@ -87,7 +87,7 @@ async function scanPlayer(player, sport) {
     // Try eBay if configured
     if (hasEbayKeys) {
       try {
-        const listings = await ebay.searchListings({ query, sport, maxPrice: 500, limit: 15 });
+        const listings = await ebay.searchListings({ query, sport, limit: 15 });
         total += await processListings(listings, sport, 'ebay');
         await new Promise(r => setTimeout(r, 2000));
       } catch (e) { /* eBay failed */ }
@@ -95,7 +95,7 @@ async function scanPlayer(player, sport) {
 
     // Try COMC (no API key needed)
     try {
-      const listings = await comc.searchListings({ query, sport, maxPrice: 500, limit: 15 });
+      const listings = await comc.searchListings({ query, sport, limit: 15 });
       total += await processListings(listings, sport, 'comc');
       await new Promise(r => setTimeout(r, 3000));
     } catch (e) {

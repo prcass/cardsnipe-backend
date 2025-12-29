@@ -35,7 +35,7 @@ export class COMCClient {
   /**
    * Search for cards on COMC using Puppeteer
    */
-  async searchListings({ query, sport, maxPrice = 500, limit = 30 }) {
+  async searchListings({ query, sport, limit = 30 }) {
     let page = null;
     try {
       const browser = await getBrowser();
@@ -43,7 +43,7 @@ export class COMCClient {
 
       await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
 
-      const searchUrl = `${this.baseUrl}/Cards?search=${encodeURIComponent(query)}&price_max=${maxPrice}`;
+      const searchUrl = `${this.baseUrl}/Cards?search=${encodeURIComponent(query)}`;
       console.log(`  COMC: Fetching ${searchUrl}`);
 
       await page.goto(searchUrl, { waitUntil: 'networkidle2', timeout: 30000 });
