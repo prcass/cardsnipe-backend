@@ -104,29 +104,29 @@ async function runWorker() {
 
   while (true) {
     try {
-      console.log('
-Starting scan at ' + new Date().toISOString());
+      console.log('');
+      console.log('Starting scan at ' + new Date().toISOString());
       let totalNew = 0;
 
-      console.log('
-Basketball:');
+      console.log('');
+      console.log('Basketball:');
       for (const player of MONITORED_PLAYERS.basketball) {
         console.log('  Scanning: ' + player);
         totalNew += await scanPlayer(player, 'basketball');
       }
 
-      console.log('
-Baseball:');
+      console.log('');
+      console.log('Baseball:');
       for (const player of MONITORED_PLAYERS.baseball) {
         console.log('  Scanning: ' + player);
         totalNew += await scanPlayer(player, 'baseball');
       }
 
       const stats = await db('listings').where('is_active', true).count('* as count').first();
-      console.log('
-Scan complete. ' + totalNew + ' new. ' + stats.count + ' total active.');
-      console.log('Waiting 5 minutes...
-');
+      console.log('');
+      console.log('Scan complete. ' + totalNew + ' new. ' + stats.count + ' total active.');
+      console.log('Waiting 5 minutes...');
+      console.log('');
       await new Promise(r => setTimeout(r, 5 * 60 * 1000));
 
     } catch (error) {
