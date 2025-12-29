@@ -67,16 +67,80 @@ export class SportsCardProClient {
   }
 
   /**
+   * Parse card details from eBay listing title
+   */
+  parseTitle(title) {
+    const titleUpper = title.toUpperCase();
+
+    // Extract year (4 digits, typically 19xx or 20xx)
+    const yearMatch = title.match(/\b(19[89]\d|20[0-2]\d)\b/);
+    const year = yearMatch ? yearMatch[1] : null;
+
+    // Extract card number
+    const numMatch = title.match(/#(\d+)/);
+    const cardNumber = numMatch ? numMatch[1] : null;
+
+    // Extract common set names
+    const sets = ['Prizm', 'Optic', 'Select', 'Mosaic', 'Contenders', 'Hoops', 'Donruss',
+                  'Topps Chrome', 'Bowman', 'Upper Deck', 'Fleer', 'Panini', 'Revolution'];
+    let set = null;
+    for (const s of sets) {
+      if (titleUpper.includes(s.toUpperCase())) {
+        set = s;
+        break;
+      }
+    }
+
+    // Extract player name (look for known patterns)
+    const playerPatterns = [
+      /lebron james/i, /victor wembanyama/i, /luka doncic/i, /anthony edwards/i,
+      /stephen curry/i, /shohei ohtani/i, /mike trout/i, /julio rodriguez/i,
+      /gunnar henderson/i, /juan soto/i
+    ];
+    let player = null;
+    for (const p of playerPatterns) {
+      const match = title.match(p);
+      if (match) {
+        player = match[0];
+        break;
+      }
+    }
+
+    return { year, set, cardNumber, player };
+  }
+
+  /**
    * Get market value for a card
    * Searches by title and returns appropriate graded price
    */
   async getMarketValue({ player, year, set, grade, cardNumber }) {
-    // Build search query - be specific for exact match
+    // If player is a full title, parse it
+    let searchYear = year;
+    let searchSet = set;
+    let searchNumber = cardNumber;
+    let searchPlayer = player;
+
+    if (player && player.length > 30) {
+      // This looks like a full title, parse it
+      const parsed = this.parseTitle(player);
+      searchYear = parsed.year || year;
+      searchSet = parsed.set || set;
+      searchNumber = parsed.cardNumber || cardNumber;
+      searchPlayer = parsed.player || player;
+    }
+
+    // Build search query - simpler is better for API matching
     let query = '';
-    if (year) query += year + ' ';
-    query += player;
-    if (set) query += ' ' + set;
-    if (cardNumber) query += ' #' + cardNumber;
+    if (searchYear) query += searchYear + ' ';
+    if (searchPlayer) query += searchPlayer + ' ';
+    if (searchSet) query += searchSet + ' ';
+    if (searchNumber) query += '#' + searchNumber;
+    query = query.trim();
+
+    if (!query || query.length < 5) {
+      console.log('  SportsCardPro: Query too short, skipping');
+      return null;
+    }
 
     console.log(`  SportsCardPro: Searching "${query}"`);
 
@@ -88,8 +152,28 @@ export class SportsCardProClient {
         return null;
       }
 
-      // Find best matching product
-      const product = products[0]; // Most relevant match
+      // Find best matching product - check if it actually matches our search
+      let product = null;
+      const searchLower = query.toLowerCase();
+      const playerLower = (searchPlayer || '').toLowerCase();
+
+      for (const p of products) {
+        const productName = (p['product-name'] || '').toLowerCase();
+        // Must contain player name
+        if (playerLower && productName.includes(playerLower.split(' ')[1] || playerLower)) {
+          // Prefer if year matches
+          if (!searchYear || productName.includes(searchYear)) {
+            product = p;
+            break;
+          }
+          if (!product) product = p; // Take first player match as fallback
+        }
+      }
+
+      if (!product) {
+        console.log('  SportsCardPro: No matching product found');
+        return null;
+      }
 
       // Get price based on grade (prices are in pennies)
       let priceInPennies = null;
