@@ -1,3 +1,4 @@
+console.log("Starting CardSnipe server...");
 import express from 'express';
 import cors from 'cors';
 import { createServer } from 'http';
