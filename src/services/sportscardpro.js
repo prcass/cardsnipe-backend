@@ -6,6 +6,7 @@
  */
 
 import fetch from 'node-fetch';
+import Tesseract from 'tesseract.js';
 import { PSAClient } from './psa.js';
 
 const psa = new PSAClient();
@@ -40,6 +41,49 @@ export class SportsCardProClient {
       }
     }
     return null;
+  }
+
+
+  /**
+   * Extract PSA cert number from image using OCR
+   * PSA slabs have the cert number printed on the label
+   */
+  async extractCertFromImage(imageUrl) {
+    if (!imageUrl) return null;
+
+    try {
+      console.log(`  OCR: Scanning image for cert number...`);
+
+      const { data: { text } } = await Tesseract.recognize(imageUrl, 'eng', {
+        logger: () => {} // Suppress progress logs
+      });
+
+      // Look for cert number patterns in OCR text
+      // PSA certs are typically 8-10 digit numbers
+      const patterns = [
+        /(\d{8,10})/g,  // Any 8-10 digit number
+        /cert[#:\s]*(\d{7,10})/gi,
+      ];
+
+      for (const pattern of patterns) {
+        const matches = text.match(pattern);
+        if (matches) {
+          for (const match of matches) {
+            const num = match.replace(/\D/g, '');
+            if (num.length >= 8 && num.length <= 10) {
+              console.log(`  OCR: Found potential cert #${num}`);
+              return num;
+            }
+          }
+        }
+      }
+
+      console.log(`  OCR: No cert number found in image`);
+      return null;
+    } catch (e) {
+      console.log(`  OCR failed: ${e.message}`);
+      return null;
+    }
   }
 
   /**
@@ -194,7 +238,23 @@ export class SportsCardProClient {
         }
       }
 
-      // If no cert found, parse title manually
+      // If no cert in title, try OCR on image
+      if (!certNum && imageUrl) {
+        certNum = await this.extractCertFromImage(imageUrl);
+        if (certNum) {
+          const certInfo = await this.lookupPSACert(certNum);
+          if (certInfo) {
+            searchYear = certInfo.year;
+            searchSet = certInfo.set;
+            searchNumber = certInfo.cardNumber;
+            searchPlayer = certInfo.player;
+            searchGrade = certInfo.grade;
+            console.log(`  Using OCR cert: ${searchYear} ${searchSet} ${searchPlayer} #${searchNumber}`);
+          }
+        }
+      }
+
+      // If still no cert found, parse title manually
       if (!searchYear || !searchPlayer) {
         const parsed = this.parseTitle(player);
         searchYear = searchYear || parsed.year || year;

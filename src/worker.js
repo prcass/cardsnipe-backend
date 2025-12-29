@@ -64,7 +64,8 @@ async function getMarketValue(listing) {
       player: listing.title,  // Full title for exact match
       year: listing.year,
       set: listing.set,
-      grade: listing.grade
+      grade: listing.grade,
+      imageUrl: listing.imageUrl  // For OCR cert extraction
     });
     // Return null if unknown - don't estimate
     if (!result || result.source === 'unknown' || !result.marketValue) {
