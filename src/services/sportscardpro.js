@@ -224,7 +224,7 @@ export class SportsCardProClient {
     // If player is a full title, try to extract PSA cert first
     if (player && player.length > 30) {
       // Try to find PSA cert number in title
-      const certNum = this.extractPSACert(player);
+      let certNum = this.extractPSACert(player);
       if (certNum) {
         const certInfo = await this.lookupPSACert(certNum);
         if (certInfo) {
