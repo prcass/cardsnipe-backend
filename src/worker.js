@@ -1,253 +1,141 @@
 /**
- * Background Worker
- * 
- * Continuously fetches listings from eBay, enriches with market data,
- * and updates the database. Run this as a separate process.
- * 
- * Usage: node src/worker.js
+ * Background Worker - Multi-Source Card Scanner
  */
 
 import { EbayClient } from './services/ebay.js';
+import { COMCClient } from './services/comc.js';
+import { Scraper130Point } from './services/scraper130point.js';
 import { PriceService } from './services/pricing.js';
 import { db } from './db/index.js';
-import { broadcastNewDeal, broadcastDealUpdate } from './server.js';
 
 const ebay = new EbayClient();
+const comc = new COMCClient();
+const scraper130 = new Scraper130Point();
 const pricing = new PriceService();
 
-// Players to monitor (expand this list!)
+const hasEbayKeys = process.env.EBAY_CLIENT_ID && process.env.EBAY_CLIENT_SECRET;
+
 const MONITORED_PLAYERS = {
-  basketball: [
-    'LeBron James',
-    'Victor Wembanyama',
-    'Luka Doncic',
-    'Anthony Edwards',
-    'Jayson Tatum',
-    'Giannis Antetokounmpo',
-    'Stephen Curry',
-    'Kevin Durant',
-    'Ja Morant',
-    'Paolo Banchero',
-    'Chet Holmgren',
-    'Shai Gilgeous-Alexander'
-  ],
-  baseball: [
-    'Shohei Ohtani',
-    'Mike Trout',
-    'Julio Rodriguez',
-    'Gunnar Henderson',
-    'Elly De La Cruz',
-    'Corbin Carroll',
-    'Adley Rutschman',
-    'Bobby Witt Jr',
-    'Ronald Acuna Jr',
-    'Juan Soto',
-    'Mookie Betts'
-  ]
+  basketball: ['LeBron James', 'Victor Wembanyama', 'Luka Doncic', 'Anthony Edwards', 'Stephen Curry'],
+  baseball: ['Shohei Ohtani', 'Mike Trout', 'Julio Rodriguez', 'Gunnar Henderson', 'Juan Soto']
 };
 
-// Premium sets to prioritize
-const PRIORITY_SETS = [
-  'Prizm',
-  'Optic',
-  'Select',
-  'Mosaic',
-  'National Treasures',
-  'Topps Chrome',
-  'Bowman Chrome',
-  'Bowman 1st'
-];
-
-/**
- * Build search queries for a player
- */
-function buildQueries(player, sport) {
-  const queries = [];
-  
-  // Base player search
-  queries.push(`${player} card`);
-  
-  // Add set-specific searches for better coverage
-  PRIORITY_SETS.slice(0, 4).forEach(set => {
-    queries.push(`${player} ${set}`);
-  });
-  
-  // Graded cards
-  queries.push(`${player} PSA 10`);
-  queries.push(`${player} BGS 9.5`);
-  
-  return queries;
+function buildQueries(player) {
+  return [player + ' card', player + ' Prizm', player + ' PSA 10'];
 }
 
-/**
- * Process and save listings to database
- */
-async function processListings(listings, sport) {
-  const enrichedListings = await pricing.enrichListings(listings);
-  
-  for (const listing of enrichedListings) {
-    // Skip if deal score is too low
-    if (listing.dealScore < 10) continue;
-    
+async function getMarketValue(listing) {
+  try {
+    const result = await scraper130.getMarketValue({
+      player: listing.title,
+      grade: listing.grade
+    });
+    return result ? result.marketValue : pricing.estimateValue(listing);
+  } catch (e) {
+    return pricing.estimateValue(listing);
+  }
+}
+
+function calculateDealScore(price, marketValue) {
+  if (!marketValue || marketValue <= 0) return 0;
+  const discount = (marketValue - price) / marketValue;
+  return Math.min(Math.max(Math.round(discount * 100), 0), 100);
+}
+
+async function processListings(listings, sport, platform) {
+  let saved = 0;
+  for (const listing of listings) {
     try {
-      // Check if listing exists
-      const existing = await db('listings')
-        .where('ebay_item_id', listing.ebayItemId)
-        .first();
-      
-      if (existing) {
-        // Update existing listing
-        await db('listings')
-          .where('id', existing.id)
-          .update({
-            current_price: listing.currentPrice,
-            bid_count: listing.bidCount,
-            deal_score: listing.dealScore,
-            market_value: listing.marketValue,
-            last_updated: new Date()
-          });
-        
-        // Broadcast update if deal score improved significantly
-        if (listing.dealScore > existing.deal_score + 5) {
-          broadcastDealUpdate({ ...listing, id: existing.id });
-        }
-      } else {
-        // Insert new listing
-        const [newListing] = await db('listings')
-          .insert({
-            ebay_item_id: listing.ebayItemId,
-            sport,
-            title: listing.title,
-            current_price: listing.currentPrice,
-            is_auction: listing.isAuction,
-            auction_end_time: listing.auctionEndTime,
-            bid_count: listing.bidCount,
-            grade: listing.grade,
-            market_value: listing.marketValue,
-            deal_score: listing.dealScore,
-            image_url: listing.imageUrl,
-            listing_url: listing.listingUrl,
-            seller_name: listing.sellerName,
-            seller_rating: listing.sellerRating,
-            platform: 'ebay',
-            is_active: true
-          })
-          .returning('*');
-        
-        // Broadcast new hot deal
-        if (listing.dealScore >= 25) {
-          broadcastNewDeal(newListing);
-          console.log(`🔥 NEW HOT DEAL: ${listing.title} - ${listing.dealScore}% off`);
+      const marketValue = await getMarketValue(listing);
+      const dealScore = calculateDealScore(listing.currentPrice, marketValue);
+      if (dealScore < 10) continue;
+
+      const itemId = listing.ebayItemId || (platform + '-' + Date.now() + '-' + Math.random().toString(36).slice(2));
+      const existing = await db('listings').where('ebay_item_id', itemId).first();
+
+      if (!existing) {
+        await db('listings').insert({
+          ebay_item_id: itemId,
+          sport: sport,
+          title: listing.title,
+          current_price: listing.currentPrice,
+          is_auction: listing.isAuction || false,
+          bid_count: listing.bidCount || 0,
+          grade: listing.grade || 'Raw',
+          market_value: marketValue,
+          deal_score: dealScore,
+          image_url: listing.imageUrl,
+          listing_url: listing.listingUrl,
+          platform: platform,
+          is_active: true
+        });
+        saved++;
+        if (dealScore >= 25) {
+          console.log('  HOT DEAL: ' + listing.title.substring(0, 50) + ' - Score: ' + dealScore);
         }
       }
-    } catch (error) {
-      console.error(`Failed to save listing ${listing.ebayItemId}:`, error.message);
+    } catch (e) { /* skip */ }
+  }
+  return saved;
+}
+
+async function scanPlayer(player, sport) {
+  const queries = buildQueries(player);
+  let total = 0;
+
+  for (const query of queries) {
+    // Try eBay if configured
+    if (hasEbayKeys) {
+      try {
+        const listings = await ebay.searchListings({ query, sport, maxPrice: 500, limit: 15 });
+        total += await processListings(listings, sport, 'ebay');
+        await new Promise(r => setTimeout(r, 2000));
+      } catch (e) { /* eBay failed */ }
+    }
+
+    // Try COMC (no API key needed)
+    try {
+      const listings = await comc.searchListings({ query, sport, maxPrice: 500, limit: 15 });
+      total += await processListings(listings, sport, 'comc');
+      await new Promise(r => setTimeout(r, 3000));
+    } catch (e) {
+      console.log('  COMC: ' + e.message);
     }
   }
+  return total;
 }
 
-/**
- * Mark ended auctions as inactive
- */
-async function cleanupEndedListings() {
-  const count = await db('listings')
-    .where('is_auction', true)
-    .where('auction_end_time', '<', new Date())
-    .where('is_active', true)
-    .update({ is_active: false });
-  
-  if (count > 0) {
-    console.log(`🧹 Marked ${count} ended auctions as inactive`);
-  }
-}
-
-/**
- * Main worker loop
- */
 async function runWorker() {
-  console.log('🚀 CardSnipe Worker started');
-  
+  console.log('CardSnipe Worker started');
+  console.log('Sources: ' + (hasEbayKeys ? 'eBay, ' : '') + 'COMC, 130point');
+
   while (true) {
     try {
-      console.log(`\n📡 Starting scan at ${new Date().toISOString()}`);
-      
-      // Scan basketball players
+      console.log('\nStarting scan at ' + new Date().toISOString());
+      let totalNew = 0;
+
+      console.log('\nBasketball:');
       for (const player of MONITORED_PLAYERS.basketball) {
-        console.log(`  Scanning: ${player} (basketball)`);
-        
-        const queries = buildQueries(player, 'basketball');
-        
-        for (const query of queries) {
-          try {
-            const listings = await ebay.searchListings({
-              query,
-              sport: 'basketball',
-              buyingOption: 'ALL',
-              maxPrice: 1000,
-              limit: 25
-            });
-            
-            if (listings.length > 0) {
-              await processListings(listings, 'basketball');
-            }
-            
-            // Rate limiting
-            await new Promise(r => setTimeout(r, 2000));
-          } catch (error) {
-            console.error(`  Query failed: ${query}`, error.message);
-          }
-        }
+        console.log('  ' + player);
+        totalNew += await scanPlayer(player, 'basketball');
       }
-      
-      // Scan baseball players
+
+      console.log('\nBaseball:');
       for (const player of MONITORED_PLAYERS.baseball) {
-        console.log(`  Scanning: ${player} (baseball)`);
-        
-        const queries = buildQueries(player, 'baseball');
-        
-        for (const query of queries) {
-          try {
-            const listings = await ebay.searchListings({
-              query,
-              sport: 'baseball',
-              buyingOption: 'ALL',
-              maxPrice: 1000,
-              limit: 25
-            });
-            
-            if (listings.length > 0) {
-              await processListings(listings, 'baseball');
-            }
-            
-            await new Promise(r => setTimeout(r, 2000));
-          } catch (error) {
-            console.error(`  Query failed: ${query}`, error.message);
-          }
-        }
+        console.log('  ' + player);
+        totalNew += await scanPlayer(player, 'baseball');
       }
-      
-      // Cleanup
-      await cleanupEndedListings();
-      
-      // Stats
-      const stats = await db('listings')
-        .where('is_active', true)
-        .count('* as count')
-        .first();
-      
-      console.log(`\n✅ Scan complete. ${stats.count} active listings.`);
-      
-      // Wait before next full scan (5 minutes)
-      console.log('⏳ Waiting 5 minutes before next scan...');
+
+      const stats = await db('listings').where('is_active', true).count('* as count').first();
+      console.log('\nScan complete. ' + totalNew + ' new. ' + stats.count + ' total.');
+      console.log('Waiting 5 minutes...\n');
       await new Promise(r => setTimeout(r, 5 * 60 * 1000));
-      
+
     } catch (error) {
-      console.error('❌ Worker error:', error);
-      // Wait 1 minute on error before retrying
+      console.error('Worker error: ' + error.message);
       await new Promise(r => setTimeout(r, 60 * 1000));
     }
   }
 }
 
-// Run the worker
 runWorker().catch(console.error);
