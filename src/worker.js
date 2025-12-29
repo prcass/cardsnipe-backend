@@ -105,15 +105,15 @@ async function processListings(listings, sport, platform) {
   let saved = 0;
   for (const listing of listings) {
     try {
-      const marketValue = await getMarketValue(listing);
+      const marketData = await getMarketValue(listing);
       
       // Skip if market value unknown - don't guess
-      if (marketValue === null) {
+      if (marketData === null) {
         console.log('  Skipped (unknown mkt): ' + listing.title.substring(0, 40));
         continue;
       }
       
-      const dealScore = calculateDealScore(listing.currentPrice, marketValue);
+      const dealScore = calculateDealScore(listing.currentPrice, marketData.value);
       if (dealScore < settings.minDealScore) continue;
 
       const itemId = listing.ebayItemId || (platform + '-' + Date.now() + '-' + Math.random().toString(36).slice(2));
