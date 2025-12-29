@@ -162,6 +162,19 @@ app.post('/api/watchlist', async (req, res) => {
   }
 });
 
+
+// Clear all listings (for removing demo/test data)
+app.delete('/api/clear-data', async (req, res) => {
+  try {
+    const deleted = await db('listings').del();
+    console.log('Cleared ' + deleted + ' listings from database');
+    res.json({ success: true, deleted });
+  } catch (error) {
+    console.error('Error clearing data:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // Stats endpoint
 app.get('/api/stats', async (req, res) => {
   try {
