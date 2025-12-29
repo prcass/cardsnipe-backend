@@ -43,7 +43,9 @@ export class COMCClient {
 
       await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
 
-      const searchUrl = `${this.baseUrl}/Cards?search=${encodeURIComponent(query)}`;
+      // COMC uses comma-separated URL: /Cards,sb,i100,Search+Term
+      const searchTerm = query.replace(/\s+/g, '+');
+      const searchUrl = `${this.baseUrl}/Cards,sb,i100,${searchTerm}`;
       console.log(`  COMC: Fetching ${searchUrl}`);
 
       await page.goto(searchUrl, { waitUntil: 'networkidle2', timeout: 30000 });
