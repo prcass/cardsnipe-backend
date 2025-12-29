@@ -29,16 +29,25 @@ export class PSAClient {
       throw new Error('PSA credentials not configured');
     }
 
+    // Use URLSearchParams for reliable encoding of special characters
+    const params = new URLSearchParams();
+    params.append('grant_type', 'password');
+    params.append('username', username);
+    params.append('password', password);
+
+    console.log('PSA: Auth attempt for ' + username.substring(0, 3) + '***');
+
     const response = await fetch('https://api.psacard.com/publicapi/token', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded'
       },
-      body: `grant_type=password&username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`
+      body: params.toString()
     });
 
     if (!response.ok) {
       const error = await response.text();
+      console.log('PSA: Auth failed - ' + response.status);
       throw new Error(`PSA auth failed: ${error}`);
     }
 
@@ -91,7 +100,6 @@ export class PSAClient {
     });
 
     if (!response.ok) {
-      // Price guide might not be available on free tier
       console.log('PSA price guide not available:', response.status);
       return null;
     }
@@ -125,11 +133,9 @@ export class PSAClient {
 
   /**
    * Extract market value from PSA data
-   * Returns estimated value based on grade and population
    */
   async getMarketValue({ player, year, set, grade }) {
     try {
-      // Try price guide first
       const priceData = await this.getPriceGuide({
         playerName: player,
         year: year,
@@ -145,7 +151,6 @@ export class PSAClient {
         };
       }
 
-      // Fallback: return null to use estimate
       return null;
     } catch (error) {
       console.error('PSA market value error:', error.message);
