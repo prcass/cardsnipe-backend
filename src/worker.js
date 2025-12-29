@@ -1,18 +1,22 @@
 /**
- * Background Worker - COMC Card Scanner
+ * Background Worker - Multi-Source Card Scanner
  */
 
 import dotenv from 'dotenv';
 dotenv.config();
 
+import { EbayClient } from './services/ebay.js';
 import { COMCClient } from './services/comc.js';
 import { Scraper130Point } from './services/scraper130point.js';
 import { PriceService } from './services/pricing.js';
 import { db } from './db/index.js';
 
+const ebay = new EbayClient();
 const comc = new COMCClient();
 const scraper130 = new Scraper130Point();
 const pricing = new PriceService();
+
+const hasEbayKeys = process.env.EBAY_CLIENT_ID && process.env.EBAY_CLIENT_SECRET;
 
 const MONITORED_PLAYERS = {
   basketball: ['LeBron James', 'Victor Wembanyama', 'Luka Doncic', 'Anthony Edwards', 'Stephen Curry'],
@@ -85,10 +89,24 @@ async function scanPlayer(player, sport) {
   let total = 0;
 
   for (const query of queries) {
+    // Try eBay if credentials are configured
+    if (hasEbayKeys) {
+      console.log('    Searching eBay: ' + query);
+      try {
+        const listings = await ebay.searchListings({ query, sport, limit: 20 });
+        console.log('    eBay found ' + listings.length + ' listings');
+        total += await processListings(listings, sport, 'ebay');
+        await new Promise(r => setTimeout(r, 2000));
+      } catch (e) {
+        console.log('    eBay error: ' + e.message);
+      }
+    }
+
+    // Also try COMC
     console.log('    Searching COMC: ' + query);
     try {
       const listings = await comc.searchListings({ query, sport, limit: 15 });
-      console.log('    Found ' + listings.length + ' listings');
+      console.log('    COMC found ' + listings.length + ' listings');
       total += await processListings(listings, sport, 'comc');
       await new Promise(r => setTimeout(r, 3000));
     } catch (e) {
@@ -99,8 +117,8 @@ async function scanPlayer(player, sport) {
 }
 
 async function runWorker() {
-  console.log('CardSnipe Worker started (COMC mode)');
-  console.log('Using Puppeteer for scraping');
+  console.log('CardSnipe Worker started');
+  console.log('Sources: ' + (hasEbayKeys ? 'eBay + ' : '') + 'COMC');
 
   while (true) {
     try {
