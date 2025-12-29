@@ -48,82 +48,71 @@ export class COMCClient {
 
       await page.goto(searchUrl, { waitUntil: 'networkidle2', timeout: 30000 });
 
-      // Wait for listings to load
-      await page.waitForSelector('.cardResult, .result, .card-listing, table tr', { timeout: 10000 }).catch(() => {});
+      // Wait for page to fully render
+      await new Promise(r => setTimeout(r, 2000));
+
+      // Debug: Check what's on the page
+      const debug = await page.evaluate(() => {
+        const links = document.querySelectorAll('a[href*="Item"]');
+        const tables = document.querySelectorAll('table');
+        const allText = document.body.innerText.substring(0, 300);
+        return { linkCount: links.length, tableCount: tables.length, preview: allText };
+      });
+      console.log(`  COMC Debug: ${debug.linkCount} item links, ${debug.tableCount} tables`);
 
       // Extract listings from the page
       const listings = await page.evaluate((baseUrl, maxItems) => {
         const results = [];
 
-        // Try multiple possible selectors for card listings
-        const selectors = [
-          '.cardResult',
-          '.result',
-          '.card-listing',
-          'table.searchResults tr',
-          '.itemCard'
-        ];
+        // Find all links to item pages
+        const itemLinks = document.querySelectorAll('a[href*="/Item/"]');
 
-        let items = [];
-        for (const selector of selectors) {
-          items = document.querySelectorAll(selector);
-          if (items.length > 0) break;
-        }
-
-        // Also try the detail view table rows
-        if (items.length === 0) {
-          items = document.querySelectorAll('table tr[onclick], table tr[data-id]');
-        }
-
-        items.forEach((item, index) => {
+        itemLinks.forEach((link, index) => {
           if (index >= maxItems) return;
 
           try {
-            // Try to find title
-            let title = '';
-            const titleEl = item.querySelector('a[title], .title, .card-title, td:first-child a, .itemTitle');
-            if (titleEl) {
-              title = titleEl.textContent?.trim() || titleEl.getAttribute('title') || '';
-            }
+            const href = link.href;
+            // Get the row or container this link is in
+            const container = link.closest('tr') || link.closest('div') || link.parentElement;
+            if (!container) return;
 
-            // Try to find price
+            // Get title
+            let title = link.textContent?.trim() || link.getAttribute('title') || '';
+
+            // Find price in the container text
             let price = 0;
-            const priceEl = item.querySelector('.price, .card-price, .item-price, td.price, [class*="price"]');
-            if (priceEl) {
-              const priceText = priceEl.textContent || '';
-              const priceMatch = priceText.match(/[\d,.]+/);
-              if (priceMatch) {
-                price = parseFloat(priceMatch[0].replace(/,/g, ''));
+            const containerText = container.innerText || '';
+            const priceMatches = containerText.match(/\$[\d,.]+/g);
+            if (priceMatches) {
+              for (const pm of priceMatches) {
+                const val = parseFloat(pm.replace(/[$,]/g, ''));
+                if (val > 0.5 && val < 5000) {
+                  price = val;
+                  break;
+                }
               }
             }
 
-            // Try to find image
+            // Find image
             let imageUrl = '';
-            const imgEl = item.querySelector('img');
-            if (imgEl) {
-              imageUrl = imgEl.src || imgEl.getAttribute('data-src') || '';
+            const img = container.querySelector('img');
+            if (img) {
+              imageUrl = img.src || img.getAttribute('data-src') || '';
             }
 
-            // Try to find listing URL
-            let listingUrl = '';
-            const linkEl = item.querySelector('a[href*="/Item/"]');
-            if (linkEl) {
-              listingUrl = linkEl.href;
-            }
-
-            if (title && price > 0) {
+            if (title.length > 10 && price > 0) {
               results.push({
-                title,
+                title: title.substring(0, 200),
                 currentPrice: price,
-                imageUrl: imageUrl.startsWith('http') ? imageUrl : baseUrl + imageUrl,
-                listingUrl: listingUrl.startsWith('http') ? listingUrl : baseUrl + listingUrl,
+                imageUrl: imageUrl,
+                listingUrl: href,
                 platform: 'comc',
                 isAuction: false,
                 bidCount: 0
               });
             }
           } catch (e) {
-            // Skip problematic items
+            // Skip
           }
         });
 
