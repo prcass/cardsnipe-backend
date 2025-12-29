@@ -6,11 +6,68 @@
  */
 
 import fetch from 'node-fetch';
+import { PSAClient } from './psa.js';
+
+const psa = new PSAClient();
+const hasPSACredentials = process.env.PSA_USERNAME && process.env.PSA_PASSWORD;
 
 export class SportsCardProClient {
   constructor() {
     this.baseUrl = 'https://www.pricecharting.com';
     this.token = process.env.SPORTSCARDPRO_TOKEN;
+  }
+
+  /**
+   * Extract PSA cert number from listing title
+   * PSA certs are typically 8-10 digit numbers
+   */
+  extractPSACert(title) {
+    // Look for patterns like "PSA 10 #12345678" or "Cert #12345678" or just long numbers
+    const patterns = [
+      /cert[#:\s]*(\d{7,10})/i,
+      /psa[^0-9]*(\d{7,10})/i,
+      /#(\d{8,10})\b/,
+    ];
+
+    for (const pattern of patterns) {
+      const match = title.match(pattern);
+      if (match && match[1]) {
+        // Verify it looks like a cert (not a card number which is usually 1-4 digits)
+        const num = match[1];
+        if (num.length >= 7) {
+          return num;
+        }
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Look up PSA cert to get exact card details
+   */
+  async lookupPSACert(certNumber) {
+    if (!hasPSACredentials) return null;
+
+    try {
+      console.log(`  PSA: Looking up cert #${certNumber}`);
+      const certInfo = await psa.getCertInfo(certNumber);
+
+      if (certInfo && certInfo.PSACert) {
+        const cert = certInfo.PSACert;
+        console.log(`  PSA: Found ${cert.Year} ${cert.Brand} ${cert.Subject} #${cert.CardNumber}`);
+        return {
+          year: cert.Year,
+          set: cert.Brand,
+          player: cert.Subject,
+          cardNumber: cert.CardNumber,
+          grade: `PSA ${cert.CardGrade}`,
+          category: cert.Category
+        };
+      }
+    } catch (e) {
+      console.log(`  PSA cert lookup failed: ${e.message}`);
+    }
+    return null;
   }
 
   /**
@@ -113,20 +170,38 @@ export class SportsCardProClient {
    * Get market value for a card
    * Searches by title and returns appropriate graded price
    */
-  async getMarketValue({ player, year, set, grade, cardNumber }) {
-    // If player is a full title, parse it
+  async getMarketValue({ player, year, set, grade, cardNumber, imageUrl }) {
     let searchYear = year;
     let searchSet = set;
     let searchNumber = cardNumber;
     let searchPlayer = player;
+    let searchGrade = grade;
 
+    // If player is a full title, try to extract PSA cert first
     if (player && player.length > 30) {
-      // This looks like a full title, parse it
-      const parsed = this.parseTitle(player);
-      searchYear = parsed.year || year;
-      searchSet = parsed.set || set;
-      searchNumber = parsed.cardNumber || cardNumber;
-      searchPlayer = parsed.player || player;
+      // Try to find PSA cert number in title
+      const certNum = this.extractPSACert(player);
+      if (certNum) {
+        const certInfo = await this.lookupPSACert(certNum);
+        if (certInfo) {
+          // Use exact details from PSA database
+          searchYear = certInfo.year;
+          searchSet = certInfo.set;
+          searchNumber = certInfo.cardNumber;
+          searchPlayer = certInfo.player;
+          searchGrade = certInfo.grade;
+          console.log(`  Using PSA cert: ${searchYear} ${searchSet} ${searchPlayer} #${searchNumber}`);
+        }
+      }
+
+      // If no cert found, parse title manually
+      if (!searchYear || !searchPlayer) {
+        const parsed = this.parseTitle(player);
+        searchYear = searchYear || parsed.year || year;
+        searchSet = searchSet || parsed.set || set;
+        searchNumber = searchNumber || parsed.cardNumber || cardNumber;
+        searchPlayer = searchPlayer || parsed.player || player;
+      }
     }
 
     // Build search query - simpler is better for API matching
@@ -179,8 +254,8 @@ export class SportsCardProClient {
       let priceInPennies = null;
       let priceKey = 'loose-price'; // default to ungraded
 
-      if (grade) {
-        const gradeUpper = grade.toUpperCase();
+      if (searchGrade) {
+        const gradeUpper = searchGrade.toUpperCase();
         if (gradeUpper.includes('PSA 10') || gradeUpper.includes('BGS 10') || gradeUpper.includes('GEM')) {
           priceKey = 'manual-only-price'; // Top grade (PSA 10/BGS 10)
           priceInPennies = product['manual-only-price'] || product['bgs-10-price'];
