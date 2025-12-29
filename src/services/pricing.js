@@ -7,6 +7,10 @@
 
 import fetch from 'node-fetch';
 import * as cheerio from 'cheerio';
+import { PSAClient } from './psa.js';
+
+const psa = new PSAClient();
+const hasPSACredentials = process.env.PSA_USERNAME && process.env.PSA_PASSWORD;
 
 export class PriceService {
   constructor() {
@@ -30,15 +34,30 @@ export class PriceService {
     let marketValue = null;
     let source = null;
 
-    // 1. Try 130point (free, eBay sold data)
-    try {
-      marketValue = await this.fetch130Point({ player, year, set, grade });
-      if (marketValue) source = '130point';
-    } catch (e) {
-      console.error('130point fetch failed:', e.message);
+    // 1. Try PSA Price Guide (if credentials configured and card is PSA graded)
+    if (hasPSACredentials && grade && grade.toLowerCase().includes('psa')) {
+      try {
+        const psaData = await psa.getMarketValue({ player, year, set, grade });
+        if (psaData && psaData.marketValue) {
+          marketValue = psaData.marketValue;
+          source = 'psa';
+        }
+      } catch (e) {
+        console.log('PSA lookup failed:', e.message);
+      }
     }
 
-    // 2. Fallback: estimate based on similar sales
+    // 2. Try 130point (free, eBay sold data)
+    if (!marketValue) {
+      try {
+        marketValue = await this.fetch130Point({ player, year, set, grade });
+        if (marketValue) source = '130point';
+      } catch (e) {
+        console.error('130point fetch failed:', e.message);
+      }
+    }
+
+    // 3. Fallback: estimate based on similar sales
     if (!marketValue) {
       marketValue = this.estimateValue({ player, year, set, grade, parallel });
       source = 'estimate';
@@ -47,7 +66,7 @@ export class PriceService {
     const result = {
       marketValue,
       source,
-      confidence: source === '130point' ? 'high' : 'medium',
+      confidence: source === 'psa' ? 'high' : source === '130point' ? 'high' : 'medium',
       lastUpdated: new Date()
     };
 
