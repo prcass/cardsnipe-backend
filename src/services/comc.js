@@ -53,67 +53,75 @@ export class COMCClient {
 
       // Debug: Check what's on the page
       const debug = await page.evaluate(() => {
-        const links = document.querySelectorAll('a[href*="Item"]');
-        const tables = document.querySelectorAll('table');
-        const allText = document.body.innerText.substring(0, 300);
-        return { linkCount: links.length, tableCount: tables.length, preview: allText };
+        const rows = document.querySelectorAll('table tr');
+        const anchors = document.querySelectorAll('a');
+        let sampleRow = rows.length > 2 ? rows[2].innerText?.substring(0, 150) : '';
+        let sampleAnchor = '';
+        for (const a of anchors) {
+          if (a.href && a.href.includes('comc.com') && a.textContent?.length > 10) {
+            sampleAnchor = a.textContent.substring(0, 80) + ' -> ' + a.href.substring(0, 50);
+            break;
+          }
+        }
+        return { rowCount: rows.length, anchorCount: anchors.length, sampleRow, sampleAnchor };
       });
-      console.log(`  COMC Debug: ${debug.linkCount} item links, ${debug.tableCount} tables`);
+      console.log(`  COMC Debug: ${debug.rowCount} rows, ${debug.anchorCount} anchors`);
+      if (debug.sampleRow) console.log(`  Sample row: ${debug.sampleRow}`);
+      if (debug.sampleAnchor) console.log(`  Sample link: ${debug.sampleAnchor}`);
 
-      // Extract listings from the page
+      // Extract listings from table rows
       const listings = await page.evaluate((baseUrl, maxItems) => {
         const results = [];
+        const rows = document.querySelectorAll('table tr');
 
-        // Find all links to item pages
-        const itemLinks = document.querySelectorAll('a[href*="/Item/"]');
-
-        itemLinks.forEach((link, index) => {
-          if (index >= maxItems) return;
+        rows.forEach((row, index) => {
+          if (results.length >= maxItems) return;
 
           try {
-            const href = link.href;
-            // Get the row or container this link is in
-            const container = link.closest('tr') || link.closest('div') || link.parentElement;
-            if (!container) return;
+            const rowText = row.innerText || '';
+            // Must have a dollar sign to be a listing
+            if (!rowText.includes('$')) return;
 
-            // Get title
-            let title = link.textContent?.trim() || link.getAttribute('title') || '';
+            // Get any link
+            const link = row.querySelector('a');
+            const listingUrl = link?.href || '';
 
-            // Find price in the container text
+            // Get title from link or first cell
+            let title = link?.textContent?.trim() || '';
+            if (!title) {
+              const firstCell = row.querySelector('td');
+              title = firstCell?.textContent?.trim() || '';
+            }
+
+            // Extract price
             let price = 0;
-            const containerText = container.innerText || '';
-            const priceMatches = containerText.match(/\$[\d,.]+/g);
+            const priceMatches = rowText.match(/\$[\d,.]+/g);
             if (priceMatches) {
               for (const pm of priceMatches) {
                 const val = parseFloat(pm.replace(/[$,]/g, ''));
-                if (val > 0.5 && val < 5000) {
+                if (val >= 1 && val < 5000) {
                   price = val;
                   break;
                 }
               }
             }
 
-            // Find image
-            let imageUrl = '';
-            const img = container.querySelector('img');
-            if (img) {
-              imageUrl = img.src || img.getAttribute('data-src') || '';
-            }
+            // Get image
+            const img = row.querySelector('img');
+            const imageUrl = img?.src || '';
 
-            if (title.length > 10 && price > 0) {
+            if (title.length > 5 && price > 0) {
               results.push({
                 title: title.substring(0, 200),
                 currentPrice: price,
-                imageUrl: imageUrl,
-                listingUrl: href,
+                imageUrl,
+                listingUrl,
                 platform: 'comc',
                 isAuction: false,
                 bidCount: 0
               });
             }
-          } catch (e) {
-            // Skip
-          }
+          } catch (e) {}
         });
 
         return results;
