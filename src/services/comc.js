@@ -1,76 +1,150 @@
 /**
- * COMC (Check Out My Cards) Scraper
+ * COMC (Check Out My Cards) Scraper with Puppeteer
  *
- * Scrapes checkoutmycards.com for sports card listings.
- * No API key required - uses web scraping.
+ * Uses headless Chrome to scrape checkoutmycards.com for sports card listings.
  */
 
-import fetch from 'node-fetch';
-import * as cheerio from 'cheerio';
+import puppeteer from 'puppeteer';
+
+let browser = null;
+
+async function getBrowser() {
+  if (!browser) {
+    browser = await puppeteer.launch({
+      executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
+      headless: 'new',
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-gpu',
+        '--no-first-run',
+        '--no-zygote',
+        '--single-process'
+      ]
+    });
+  }
+  return browser;
+}
 
 export class COMCClient {
   constructor() {
     this.baseUrl = 'https://www.comc.com';
-    this.headers = {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-      'Accept-Language': 'en-US,en;q=0.5'
-    };
   }
 
   /**
-   * Search for cards on COMC
+   * Search for cards on COMC using Puppeteer
    */
-  async searchListings({ query, sport, maxPrice = 500, limit = 50 }) {
+  async searchListings({ query, sport, maxPrice = 500, limit = 30 }) {
+    let page = null;
     try {
+      const browser = await getBrowser();
+      page = await browser.newPage();
+
+      await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+
       const searchUrl = `${this.baseUrl}/Cards?search=${encodeURIComponent(query)}&price_max=${maxPrice}`;
+      console.log(`  COMC: Fetching ${searchUrl}`);
 
-      const response = await fetch(searchUrl, { headers: this.headers });
+      await page.goto(searchUrl, { waitUntil: 'networkidle2', timeout: 30000 });
 
-      if (!response.ok) {
-        console.error(`COMC search failed: ${response.status}`);
-        return [];
-      }
+      // Wait for listings to load
+      await page.waitForSelector('.cardResult, .result, .card-listing, table tr', { timeout: 10000 }).catch(() => {});
 
-      const html = await response.text();
-      const $ = cheerio.load(html);
+      // Extract listings from the page
+      const listings = await page.evaluate((baseUrl, maxItems) => {
+        const results = [];
 
-      const listings = [];
+        // Try multiple possible selectors for card listings
+        const selectors = [
+          '.cardResult',
+          '.result',
+          '.card-listing',
+          'table.searchResults tr',
+          '.itemCard'
+        ];
 
-      // Parse COMC listing cards
-      $('.itemCard, .card-item, .listing-item').slice(0, limit).each((i, el) => {
-        try {
-          const $el = $(el);
-
-          const title = $el.find('.title, .card-title, .item-title, a').first().text().trim();
-          const priceText = $el.find('.price, .card-price, .item-price').text().trim();
-          const price = parseFloat(priceText.replace(/[$,]/g, '')) || 0;
-          const imageUrl = $el.find('img').attr('src') || $el.find('img').attr('data-src');
-          const listingUrl = $el.find('a').attr('href');
-
-          if (title && price > 0) {
-            listings.push({
-              title,
-              currentPrice: price,
-              imageUrl: imageUrl?.startsWith('http') ? imageUrl : `${this.baseUrl}${imageUrl}`,
-              listingUrl: listingUrl?.startsWith('http') ? listingUrl : `${this.baseUrl}${listingUrl}`,
-              platform: 'comc',
-              isAuction: false,
-              bidCount: 0,
-              ...this.parseCardDetails(title)
-            });
-          }
-        } catch (e) {
-          // Skip problematic listings
+        let items = [];
+        for (const selector of selectors) {
+          items = document.querySelectorAll(selector);
+          if (items.length > 0) break;
         }
-      });
+
+        // Also try the detail view table rows
+        if (items.length === 0) {
+          items = document.querySelectorAll('table tr[onclick], table tr[data-id]');
+        }
+
+        items.forEach((item, index) => {
+          if (index >= maxItems) return;
+
+          try {
+            // Try to find title
+            let title = '';
+            const titleEl = item.querySelector('a[title], .title, .card-title, td:first-child a, .itemTitle');
+            if (titleEl) {
+              title = titleEl.textContent?.trim() || titleEl.getAttribute('title') || '';
+            }
+
+            // Try to find price
+            let price = 0;
+            const priceEl = item.querySelector('.price, .card-price, .item-price, td.price, [class*="price"]');
+            if (priceEl) {
+              const priceText = priceEl.textContent || '';
+              const priceMatch = priceText.match(/[\d,.]+/);
+              if (priceMatch) {
+                price = parseFloat(priceMatch[0].replace(/,/g, ''));
+              }
+            }
+
+            // Try to find image
+            let imageUrl = '';
+            const imgEl = item.querySelector('img');
+            if (imgEl) {
+              imageUrl = imgEl.src || imgEl.getAttribute('data-src') || '';
+            }
+
+            // Try to find listing URL
+            let listingUrl = '';
+            const linkEl = item.querySelector('a[href*="/Item/"]');
+            if (linkEl) {
+              listingUrl = linkEl.href;
+            }
+
+            if (title && price > 0) {
+              results.push({
+                title,
+                currentPrice: price,
+                imageUrl: imageUrl.startsWith('http') ? imageUrl : baseUrl + imageUrl,
+                listingUrl: listingUrl.startsWith('http') ? listingUrl : baseUrl + listingUrl,
+                platform: 'comc',
+                isAuction: false,
+                bidCount: 0
+              });
+            }
+          } catch (e) {
+            // Skip problematic items
+          }
+        });
+
+        return results;
+      }, this.baseUrl, limit);
 
       console.log(`  COMC found ${listings.length} listings for "${query}"`);
-      return listings;
+
+      // Parse card details for each listing
+      return listings.map(listing => ({
+        ...listing,
+        ...this.parseCardDetails(listing.title)
+      }));
 
     } catch (error) {
       console.error(`COMC search error: ${error.message}`);
       return [];
+    } finally {
+      if (page) {
+        await page.close().catch(() => {});
+      }
     }
   }
 
@@ -126,3 +200,12 @@ export class COMCClient {
     return result;
   }
 }
+
+// Cleanup browser on process exit
+process.on('exit', () => {
+  if (browser) browser.close().catch(() => {});
+});
+process.on('SIGINT', () => {
+  if (browser) browser.close().catch(() => {});
+  process.exit();
+});

@@ -1,70 +1,111 @@
 /**
- * 130point.com Scraper
+ * 130point.com Scraper with Puppeteer
  *
- * Scrapes 130point.com for eBay sold data to get accurate market values.
- * This site aggregates eBay sold listings - perfect for price research.
+ * Uses headless Chrome to scrape 130point.com for eBay sold data.
  */
 
-import fetch from 'node-fetch';
-import * as cheerio from 'cheerio';
+import puppeteer from 'puppeteer';
+
+let browser = null;
+
+async function getBrowser() {
+  if (!browser) {
+    browser = await puppeteer.launch({
+      executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
+      headless: 'new',
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-gpu',
+        '--no-first-run',
+        '--no-zygote',
+        '--single-process'
+      ]
+    });
+  }
+  return browser;
+}
 
 export class Scraper130Point {
   constructor() {
     this.baseUrl = 'https://130point.com';
-    this.headers = {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
-    };
   }
 
   /**
    * Get recent sold prices for a card search
    */
   async getSoldPrices(query) {
+    let page = null;
     try {
+      const browser = await getBrowser();
+      page = await browser.newPage();
+
+      await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+
       const searchUrl = `${this.baseUrl}/sales/?search=${encodeURIComponent(query)}`;
+      console.log(`  130point: Fetching ${searchUrl}`);
 
-      const response = await fetch(searchUrl, {
-        headers: this.headers,
-        timeout: 10000
-      });
+      await page.goto(searchUrl, { waitUntil: 'networkidle2', timeout: 30000 });
 
-      if (!response.ok) {
-        console.error(`130point fetch failed: ${response.status}`);
-        return null;
-      }
+      // Wait for the sales table to load
+      await page.waitForSelector('table tbody tr, .sales-table tr, #salesDataTable', { timeout: 15000 }).catch(() => {});
 
-      const html = await response.text();
-      const $ = cheerio.load(html);
+      // Give extra time for dynamic content
+      await new Promise(r => setTimeout(r, 2000));
 
-      const sales = [];
+      // Extract sales data from the page
+      const sales = await page.evaluate(() => {
+        const results = [];
 
-      // Parse the sales table
-      $('table tbody tr').each((i, row) => {
-        try {
-          const cells = $(row).find('td');
-          if (cells.length >= 3) {
-            const title = $(cells[0]).text().trim();
-            const priceText = $(cells[1]).text().trim();
-            const dateText = $(cells[2]).text().trim();
+        // Try multiple selectors for the sales table
+        const rows = document.querySelectorAll('table tbody tr, .sales-table tr, #salesDataTable tbody tr');
 
-            const price = parseFloat(priceText.replace(/[$,]/g, ''));
+        rows.forEach((row) => {
+          try {
+            const cells = row.querySelectorAll('td');
+            if (cells.length >= 2) {
+              // Try to get title from first cell
+              let title = cells[0]?.textContent?.trim() || '';
 
-            if (!isNaN(price) && price > 0) {
-              sales.push({
-                title,
-                price,
-                date: dateText,
-                source: '130point'
-              });
+              // Try to get price - look for dollar sign
+              let price = 0;
+              for (let i = 0; i < cells.length; i++) {
+                const text = cells[i]?.textContent || '';
+                if (text.includes('$')) {
+                  const match = text.match(/\$?([\d,.]+)/);
+                  if (match) {
+                    price = parseFloat(match[1].replace(/,/g, ''));
+                    break;
+                  }
+                }
+              }
+
+              // Get date if available
+              let date = '';
+              if (cells.length >= 3) {
+                date = cells[2]?.textContent?.trim() || '';
+              }
+
+              if (title && price > 0) {
+                results.push({
+                  title,
+                  price,
+                  date,
+                  source: '130point'
+                });
+              }
             }
+          } catch (e) {
+            // Skip problematic rows
           }
-        } catch (e) {
-          // Skip problematic rows
-        }
+        });
+
+        return results;
       });
 
       if (sales.length === 0) {
+        console.log(`  130point: No sales found for "${query}"`);
         return null;
       }
 
@@ -84,6 +125,8 @@ export class Scraper130Point {
       const lowest = prices[0];
       const highest = prices[prices.length - 1];
 
+      console.log(`  130point: Found ${sales.length} sales, avg $${Math.round(average)}`);
+
       return {
         marketValue: Math.round(average * 100) / 100,
         median: Math.round(median * 100) / 100,
@@ -97,6 +140,10 @@ export class Scraper130Point {
     } catch (error) {
       console.error(`130point scrape error: ${error.message}`);
       return null;
+    } finally {
+      if (page) {
+        await page.close().catch(() => {});
+      }
     }
   }
 
@@ -119,3 +166,12 @@ export class Scraper130Point {
     return result;
   }
 }
+
+// Cleanup browser on process exit
+process.on('exit', () => {
+  if (browser) browser.close().catch(() => {});
+});
+process.on('SIGINT', () => {
+  if (browser) browser.close().catch(() => {});
+  process.exit();
+});
