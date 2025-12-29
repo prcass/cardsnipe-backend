@@ -315,7 +315,7 @@ export class SportsCardProClient {
       }
 
       if (!product) {
-        console.log('  SportsCardPro: No matching product found');
+        console.log('  SportsCardPro: No matching product found in ' + products.length + ' results');
         return null;
       }
 

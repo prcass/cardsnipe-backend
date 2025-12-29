@@ -12,7 +12,7 @@ const sportsCardPro = new SportsCardProClient();
 const psa = new PSAClient();
 
 const hasSportsCardProToken = !!process.env.SPORTSCARDPRO_TOKEN;
-const hasPSACredentials = process.env.PSA_USERNAME && process.env.PSA_PASSWORD;
+const hasPSACredentials = process.env.PSA_ACCESS_TOKEN || (process.env.PSA_USERNAME && process.env.PSA_PASSWORD);
 
 export class PriceService {
   constructor() {
@@ -24,7 +24,7 @@ export class PriceService {
    * Get market value for a card
    * Returns source, URL, and date for transparency
    */
-  async getMarketValue({ player, year, set, grade, cardNumber }) {
+  async getMarketValue({ player, year, set, grade, cardNumber, imageUrl }) {
     const cacheKey = `${player}:${year}:${set}:${grade}:${cardNumber || ''}`.toLowerCase();
 
     // Check cache
@@ -38,7 +38,7 @@ export class PriceService {
     // 1. Try SportsCardPro (primary source)
     if (hasSportsCardProToken) {
       try {
-        result = await sportsCardPro.getMarketValue({ player, year, set, grade, cardNumber });
+        result = await sportsCardPro.getMarketValue({ player, year, set, grade, cardNumber, imageUrl });
         if (result && result.marketValue) {
           result.confidence = 'high';
         }
