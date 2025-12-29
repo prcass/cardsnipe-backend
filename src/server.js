@@ -184,7 +184,7 @@ app.delete('/api/clear-data', async (req, res) => {
 // EBAY MARKETPLACE ACCOUNT DELETION WEBHOOK
 // ============================================
 
-const EBAY_VERIFICATION_TOKEN = process.env.EBAY_VERIFICATION_TOKEN || 'cardsnipe_verify_2024';
+const EBAY_VERIFICATION_TOKEN = process.env.EBAY_VERIFICATION_TOKEN || 'cardsnipe_verification_token_2024_ebay_marketplace';
 
 // GET - eBay challenge verification
 app.get('/api/ebay/deletion', (req, res) => {
