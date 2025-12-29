@@ -15,21 +15,30 @@ export class PSAClient {
   }
 
   /**
-   * Get OAuth access token using PSA credentials
+   * Get access token - uses PSA_ACCESS_TOKEN directly if set,
+   * otherwise falls back to OAuth username/password flow
    */
   async getAccessToken() {
+    // Option 1: Use direct access token from env (from PSA portal)
+    const directToken = process.env.PSA_ACCESS_TOKEN;
+    if (directToken) {
+      console.log('PSA: Using direct access token');
+      return directToken;
+    }
+
+    // Option 2: Use cached token if still valid
     if (this.accessToken && this.tokenExpiry > Date.now()) {
       return this.accessToken;
     }
 
+    // Option 3: Get new token via OAuth
     const username = process.env.PSA_USERNAME;
     const password = process.env.PSA_PASSWORD;
 
     if (!username || !password) {
-      throw new Error('PSA credentials not configured');
+      throw new Error('PSA credentials not configured - set PSA_ACCESS_TOKEN or PSA_USERNAME/PSA_PASSWORD');
     }
 
-    // Use URLSearchParams for reliable encoding of special characters
     const params = new URLSearchParams();
     params.append('grant_type', 'password');
     params.append('username', username);
@@ -67,7 +76,7 @@ export class PSAClient {
 
     const response = await fetch(`${this.baseUrl}/cert/GetByCertNumber/${certNumber}`, {
       headers: {
-        'Authorization': `Bearer ${token}`
+        'Authorization': `bearer ${token}`
       }
     });
 
@@ -80,12 +89,10 @@ export class PSAClient {
 
   /**
    * Get price guide data for a card (if available)
-   * Note: This endpoint may require paid tier
    */
   async getPriceGuide(params) {
     const token = await this.getAccessToken();
 
-    // Build search params
     const query = new URLSearchParams();
     if (params.sport) query.append('sport', params.sport);
     if (params.year) query.append('year', params.year);
@@ -95,7 +102,7 @@ export class PSAClient {
 
     const response = await fetch(`${this.baseUrl}/prices/GetPrices?${query}`, {
       headers: {
-        'Authorization': `Bearer ${token}`
+        'Authorization': `bearer ${token}`
       }
     });
 
@@ -120,7 +127,7 @@ export class PSAClient {
 
     const response = await fetch(`${this.baseUrl}/pop/GetPopulation?${query}`, {
       headers: {
-        'Authorization': `Bearer ${token}`
+        'Authorization': `bearer ${token}`
       }
     });
 
