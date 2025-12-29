@@ -1,4 +1,7 @@
 console.log("Starting CardSnipe server...");
+import dotenv from "dotenv";
+dotenv.config();
+
 import express from 'express';
 import cors from 'cors';
 import { createServer } from 'http';
@@ -238,7 +241,7 @@ export function broadcastNewDeal(deal) {
 
 const PORT = process.env.PORT || 3001;
 
-httpServer.listen(PORT, () => {
+httpServer.listen(PORT, "0.0.0.0", () => {
   console.log(`🚀 CardSnipe API running on port ${PORT}`);
 });
 
