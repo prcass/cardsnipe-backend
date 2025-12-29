@@ -6,7 +6,7 @@
   "main": "src/server.js",
   "scripts": {
     "dev": "node --watch src/server.js",
-    "start": "knex migrate:latest && node src/server.js",
+    "start": "knex migrate:latest && node src/worker.js & node src/server.js",
     "worker": "node src/worker.js",
     "db:migrate": "knex migrate:latest",
     "db:seed": "knex seed:run",
