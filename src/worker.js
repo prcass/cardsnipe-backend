@@ -18,6 +18,29 @@ const pricing = new PriceService();
 
 const hasEbayKeys = process.env.EBAY_CLIENT_ID && process.env.EBAY_CLIENT_SECRET;
 
+// Default settings (can be overridden via API)
+let settings = {
+  maxPrice: 500,
+  minDealScore: 10
+};
+
+// Fetch settings from server API
+async function fetchSettings() {
+  try {
+    const serverUrl = process.env.SERVER_URL || 'http://localhost:3001';
+    const response = await fetch(serverUrl + '/api/settings');
+    if (response.ok) {
+      const data = await response.json();
+      if (data.success) {
+        settings = data.data;
+        console.log('Settings loaded: maxPrice=' + settings.maxPrice);
+      }
+    }
+  } catch (e) {
+    // Use defaults if server not available
+  }
+}
+
 const MONITORED_PLAYERS = {
   basketball: ['LeBron James', 'Victor Wembanyama', 'Luka Doncic', 'Anthony Edwards', 'Stephen Curry'],
   baseball: ['Shohei Ohtani', 'Mike Trout', 'Julio Rodriguez', 'Gunnar Henderson', 'Juan Soto']
@@ -67,7 +90,7 @@ async function processListings(listings, sport, platform) {
     try {
       const marketValue = await getMarketValue(listing);
       const dealScore = calculateDealScore(listing.currentPrice, marketValue);
-      if (dealScore < 10) continue;
+      if (dealScore < settings.minDealScore) continue;
 
       const itemId = listing.ebayItemId || (platform + '-' + Date.now() + '-' + Math.random().toString(36).slice(2));
       const existing = await db('listings').where('ebay_item_id', itemId).first();
@@ -109,7 +132,7 @@ async function scanPlayer(player, sport) {
     if (hasEbayKeys) {
       console.log('    Searching eBay: ' + query);
       try {
-        const listings = await ebay.searchListings({ query, sport, limit: 20 });
+        const listings = await ebay.searchListings({ query, sport, limit: 20, maxPrice: settings.maxPrice });
         console.log('    eBay found ' + listings.length + ' listings');
         total += await processListings(listings, sport, 'ebay');
         await new Promise(r => setTimeout(r, 2000));
@@ -139,6 +162,7 @@ async function runWorker() {
   while (true) {
     try {
       console.log('');
+      await fetchSettings();
       console.log('Starting scan at ' + new Date().toISOString());
       let totalNew = 0;
 

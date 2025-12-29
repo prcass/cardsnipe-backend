@@ -204,6 +204,40 @@ app.post('/api/ebay/deletion', (req, res) => {
   res.status(200).json({ success: true });
 });
 
+
+// ============================================
+// SETTINGS API
+// ============================================
+
+// In-memory settings (persists until restart, could use DB for persistence)
+let appSettings = {
+  maxPrice: 500,        // Maximum price to search for
+  minDealScore: 10,     // Minimum deal score to save
+  scanInterval: 5       // Minutes between scans
+};
+
+// Get current settings
+app.get('/api/settings', (req, res) => {
+  res.json({ success: true, data: appSettings });
+});
+
+// Update settings
+app.post('/api/settings', (req, res) => {
+  const { maxPrice, minDealScore, scanInterval } = req.body;
+
+  if (maxPrice !== undefined) appSettings.maxPrice = Number(maxPrice);
+  if (minDealScore !== undefined) appSettings.minDealScore = Number(minDealScore);
+  if (scanInterval !== undefined) appSettings.scanInterval = Number(scanInterval);
+
+  console.log('Settings updated:', appSettings);
+  res.json({ success: true, data: appSettings });
+});
+
+// Export settings for worker to use
+export function getSettings() {
+  return appSettings;
+}
+
 // Stats endpoint
 app.get('/api/stats', async (req, res) => {
   try {
