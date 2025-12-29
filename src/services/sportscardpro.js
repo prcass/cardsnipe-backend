@@ -289,20 +289,29 @@ export class SportsCardProClient {
 
       // Find best matching product - check if it actually matches our search
       let product = null;
-      const searchLower = query.toLowerCase();
-      const playerLower = (searchPlayer || '').toLowerCase();
+      const playerLower = (searchPlayer || '').toLowerCase().trim();
+      const playerParts = playerLower.split(/\s+/);
+      const firstName = playerParts[0] || '';
+      const lastName = playerParts[playerParts.length - 1] || '';
 
       for (const p of products) {
         const productName = (p['product-name'] || '').toLowerCase();
-        // Must contain player name
-        if (playerLower && productName.includes(playerLower.split(' ')[1] || playerLower)) {
-          // Prefer if year matches
-          if (!searchYear || productName.includes(searchYear)) {
-            product = p;
-            break;
-          }
-          if (!product) product = p; // Take first player match as fallback
+
+        // Require BOTH first and last name to be in the product name
+        // This prevents "James Bond" matching for "LeBron James"
+        const hasFirstName = firstName && productName.includes(firstName);
+        const hasLastName = lastName && productName.includes(lastName);
+
+        if (!hasFirstName || !hasLastName) {
+          continue; // Skip if doesn't have both names
         }
+
+        // Prefer if year matches
+        if (!searchYear || productName.includes(searchYear)) {
+          product = p;
+          break;
+        }
+        if (!product) product = p; // Take first player match as fallback
       }
 
       if (!product) {
