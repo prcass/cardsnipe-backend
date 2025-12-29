@@ -211,6 +211,7 @@ app.post('/api/ebay/deletion', (req, res) => {
 
 // In-memory settings (persists until restart, could use DB for persistence)
 let appSettings = {
+  minPrice: 0,          // Minimum price to search for
   maxPrice: 500,        // Maximum price to search for
   minDealScore: 10,     // Minimum deal score to save
   scanInterval: 5       // Minutes between scans
@@ -223,8 +224,9 @@ app.get('/api/settings', (req, res) => {
 
 // Update settings
 app.post('/api/settings', (req, res) => {
-  const { maxPrice, minDealScore, scanInterval } = req.body;
+  const { minPrice, maxPrice, minDealScore, scanInterval } = req.body;
 
+  if (minPrice !== undefined) appSettings.minPrice = Number(minPrice);
   if (maxPrice !== undefined) appSettings.maxPrice = Number(maxPrice);
   if (minDealScore !== undefined) appSettings.minDealScore = Number(minDealScore);
   if (scanInterval !== undefined) appSettings.scanInterval = Number(scanInterval);

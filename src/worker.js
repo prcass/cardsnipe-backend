@@ -20,6 +20,7 @@ const hasEbayKeys = process.env.EBAY_CLIENT_ID && process.env.EBAY_CLIENT_SECRET
 
 // Default settings (can be overridden via API)
 let settings = {
+  minPrice: 0,
   maxPrice: 500,
   minDealScore: 10
 };
@@ -33,7 +34,7 @@ async function fetchSettings() {
       const data = await response.json();
       if (data.success) {
         settings = data.data;
-        console.log('Settings loaded: maxPrice=' + settings.maxPrice);
+        console.log('Settings loaded: minPrice=' + settings.minPrice + ', maxPrice=' + settings.maxPrice);
       }
     }
   } catch (e) {
@@ -85,6 +86,8 @@ function isPSA9or10(listing) {
 async function processListings(listings, sport, platform) {
   // Filter to only PSA 9 and 10
   listings = listings.filter(isPSA9or10);
+  // Filter by price range
+  listings = listings.filter(l => l.currentPrice >= settings.minPrice && l.currentPrice <= settings.maxPrice);
   let saved = 0;
   for (const listing of listings) {
     try {
