@@ -16,13 +16,10 @@ export default {
       directory: './src/db/migrations'
     }
   },
-  
+
   production: {
     client: 'pg',
-    connection: {
-      connectionString: process.env.DATABASE_URL,
-      ssl: { rejectUnauthorized: false }
-    },
+    connection: process.env.DATABASE_URL + '?sslmode=require',
     pool: { min: 2, max: 20 },
     migrations: {
       directory: './src/db/migrations'
