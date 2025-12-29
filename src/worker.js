@@ -24,7 +24,13 @@ const MONITORED_PLAYERS = {
 };
 
 function buildQueries(player) {
-  return [player + ' card', player + ' Prizm', player + ' PSA 10'];
+  // Only search for PSA 9 and PSA 10 graded cards
+  return [
+    player + ' PSA 10',
+    player + ' PSA 9',
+    player + ' Prizm PSA 10',
+    player + ' Prizm PSA 9'
+  ];
 }
 
 async function getMarketValue(listing) {
@@ -45,7 +51,17 @@ function calculateDealScore(price, marketValue) {
   return Math.min(Math.max(Math.round(discount * 100), 0), 100);
 }
 
+// Only accept PSA 9 or PSA 10 graded cards
+function isPSA9or10(listing) {
+  const title = (listing.title || '').toUpperCase();
+  const grade = (listing.grade || '').toUpperCase();
+  return title.includes('PSA 10') || title.includes('PSA 9') ||
+         grade.includes('PSA 10') || grade.includes('PSA 9');
+}
+
 async function processListings(listings, sport, platform) {
+  // Filter to only PSA 9 and 10
+  listings = listings.filter(isPSA9or10);
   let saved = 0;
   for (const listing of listings) {
     try {
