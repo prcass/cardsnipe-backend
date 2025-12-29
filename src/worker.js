@@ -115,7 +115,7 @@ async function processListings(listings, sport, platform) {
       }
       
       const dealScore = calculateDealScore(listing.currentPrice, marketData.value);
-      if (dealScore < settings.minDealScore) continue;
+      if (dealScore < settings.minDealScore) { console.log("  Skipped (low score): $" + listing.currentPrice + " vs mkt $" + marketData.value + " = " + dealScore + "%"); continue; }
 
       const itemId = listing.ebayItemId || (platform + '-' + Date.now() + '-' + Math.random().toString(36).slice(2));
       const existing = await db('listings').where('ebay_item_id', itemId).first();

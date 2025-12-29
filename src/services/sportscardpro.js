@@ -221,6 +221,20 @@ export class SportsCardProClient {
     let searchPlayer = player;
     let searchGrade = grade;
 
+    // Extract grade from title if not provided
+    if (!searchGrade && player) {
+      const titleUpper = player.toUpperCase();
+      if (titleUpper.includes("PSA 10") || titleUpper.includes("GEM MINT")) {
+        searchGrade = "PSA 10";
+      } else if (titleUpper.includes("PSA 9")) {
+        searchGrade = "PSA 9";
+      } else if (titleUpper.includes("BGS 10")) {
+        searchGrade = "BGS 10";
+      } else if (titleUpper.includes("BGS 9")) {
+        searchGrade = "BGS 9";
+      }
+    }
+
     // If player is a full title, try to extract PSA cert first
     if (player && player.length > 30) {
       // Try to find PSA cert number in title
@@ -323,7 +337,7 @@ export class SportsCardProClient {
       let priceInPennies = null;
       let priceKey = 'loose-price'; // default to ungraded
 
-      if (searchGrade) {
+      console.log("  Grade for pricing: " + searchGrade); if (searchGrade) {
         const gradeUpper = searchGrade.toUpperCase();
         if (gradeUpper.includes('PSA 10') || gradeUpper.includes('BGS 10') || gradeUpper.includes('GEM')) {
           priceKey = 'manual-only-price'; // Top grade (PSA 10/BGS 10)
