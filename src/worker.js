@@ -58,14 +58,28 @@ function buildQueries(player) {
 }
 
 async function getMarketValue(listing) {
+  // Use the full title for exact card matching
   try {
-    const result = await scraper130.getMarketValue({
-      player: listing.title,
+    const result = await pricing.getMarketValue({
+      player: listing.title,  // Full title for exact match
+      year: listing.year,
+      set: listing.set,
       grade: listing.grade
     });
-    return result ? result.marketValue : pricing.estimateValue(listing);
+    // Return null if unknown - don't estimate
+    if (!result || result.source === 'unknown' || !result.marketValue) {
+      return null;
+    }
+    // Return full result with source info
+    return {
+      value: result.marketValue,
+      source: result.source,
+      sourceUrl: result.sourceUrl,
+      date: result.lastUpdated
+    };
   } catch (e) {
-    return pricing.estimateValue(listing);
+    console.log('  Price lookup failed: ' + e.message);
+    return null;
   }
 }
 
@@ -92,6 +106,13 @@ async function processListings(listings, sport, platform) {
   for (const listing of listings) {
     try {
       const marketValue = await getMarketValue(listing);
+      
+      // Skip if market value unknown - don't guess
+      if (marketValue === null) {
+        console.log('  Skipped (unknown mkt): ' + listing.title.substring(0, 40));
+        continue;
+      }
+      
       const dealScore = calculateDealScore(listing.currentPrice, marketValue);
       if (dealScore < settings.minDealScore) continue;
 
@@ -107,7 +128,10 @@ async function processListings(listings, sport, platform) {
           is_auction: listing.isAuction || false,
           bid_count: listing.bidCount || 0,
           grade: listing.grade || 'Raw',
-          market_value: marketValue,
+          market_value: marketData.value,
+          market_value_source: marketData.source,
+          market_value_url: marketData.sourceUrl,
+          market_value_date: marketData.date,
           deal_score: dealScore,
           image_url: listing.imageUrl,
           listing_url: listing.listingUrl,
