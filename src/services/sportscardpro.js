@@ -333,14 +333,8 @@ export class SportsCardProClient {
       return null;
     }
 
-    // Card # is REQUIRED for accurate matching - skip if not found
-    if (!searchNumber) {
-      console.log('  SportsCardPro: No card # found in title, skipping (card # required)');
-      return null;
-    }
-
-    // Always log what we're searching for
-    console.log(`  SportsCardPro: Searching "${query}" #${searchNumber} ${searchYear || ''} ${searchSet || ''} ${searchParallel || 'base'}`);
+    // Log what we're searching for - all criteria must match
+    console.log(`  SportsCardPro: Searching "${query}" #${searchNumber || '?'} ${searchYear || '?'} ${searchSet || '?'} ${searchParallel || 'base'}`);
 
     try {
       const products = await this.searchCards(query, searchSport);
@@ -400,50 +394,58 @@ export class SportsCardProClient {
         }
         nameMatchCount++;
 
-        // STRICT MATCHING - Card # is KEY, all criteria must match
+        // STRICT MATCHING - ALL criteria must match or skip
 
-        // 1. REQUIRED: Card number must match exactly (e.g., "#129")
-        const hasCardNumber = searchNumber && productName.includes('#' + searchNumber);
-        if (searchNumber && !hasCardNumber) {
-          continue; // Card # is required - skip if doesn't match
+        // 1. Card number MUST be present and match
+        if (!searchNumber) {
+          continue; // Can't match without card #
+        }
+        const hasCardNumber = productName.includes('#' + searchNumber);
+        if (!hasCardNumber) {
+          continue;
         }
 
-        // 2. REQUIRED: Year must match
-        const yearMatch = searchYear && (consoleName.includes(searchYear) || productName.includes(searchYear));
-        if (searchYear && !yearMatch) {
-          continue; // Year is required - skip if doesn't match
+        // 2. Year MUST be present and match
+        if (!searchYear) {
+          continue; // Can't match without year
+        }
+        const yearMatch = consoleName.includes(searchYear) || productName.includes(searchYear);
+        if (!yearMatch) {
+          continue;
         }
 
-        // 3. REQUIRED: Set must match exactly (Panini Prizm ≠ Panini Excalibur)
-        const searchSetLower = (searchSet || '').toLowerCase();
-        if (searchSetLower) {
-          // Check both console-name and product-name for the set
-          const setInConsole = consoleName.includes(searchSetLower);
-          const setInProduct = productName.includes(searchSetLower);
-          if (!setInConsole && !setInProduct) {
-            continue; // Set must match
-          }
+        // 3. Set MUST be present and match exactly
+        if (!searchSet) {
+          continue; // Can't match without set
+        }
+        const searchSetLower = searchSet.toLowerCase();
+        const setInConsole = consoleName.includes(searchSetLower);
+        const setInProduct = productName.includes(searchSetLower);
+        if (!setInConsole && !setInProduct) {
+          continue;
         }
 
-        // 4. Parallel/color must match if specified
+        // 4. Parallel must match (base = no parallel keyword in product)
         const searchParallelLower = (searchParallel || '').toLowerCase();
         if (searchParallelLower) {
+          // Looking for specific parallel - must be in product
           const hasParallel = productName.includes(searchParallelLower) || consoleName.includes(searchParallelLower);
           if (!hasParallel) {
-            continue; // Parallel specified but not found
+            continue;
           }
         }
+        // If no parallel specified (base card), that's fine - we don't require "base" keyword
 
         // 5. Autograph status must match
         const productIsAuto = productName.includes('auto') || productName.includes('autograph') || productName.includes('signed');
         if (searchIsAuto !== productIsAuto) {
-          continue; // Auto mismatch
+          continue;
         }
 
-        // ALL CRITERIA MATCHED - this is our product!
+        // ALL CRITERIA MATCHED!
         product = p;
         console.log(`  SportsCardPro: MATCH ${p['console-name']} - ${p['product-name']}`);
-        console.log(`    Card #${searchNumber || 'any'}, Year ${searchYear || 'any'}, Set ${searchSet || 'any'}, Parallel ${searchParallel || 'base'}`);
+        console.log(`    #${searchNumber}, ${searchYear}, ${searchSet}, ${searchParallel || 'base'}, auto=${searchIsAuto}`);
         break;
       }
 
