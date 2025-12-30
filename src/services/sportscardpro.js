@@ -379,13 +379,10 @@ export class SportsCardProClient {
         const setMatch = searchSet.toLowerCase() === (scpData.set || '').toLowerCase();
 
         // Parallel matching: be STRICT to avoid false matches
-        // "Fast Break Purple" is NOT the same as "Purple Holo" - different parallel lines!
+        // "Orange Prizm" is different from "Orange" - do NOT strip suffixes!
         const normalizeParallel = (p) => {
           if (!p) return '';
-          return p.toLowerCase()
-            .replace(/ prizm$/, '')  // "green prizm" → "green"
-            .replace(/ refractor$/, '')  // "blue refractor" → "blue"
-            .trim();
+          return p.toLowerCase().trim();
         };
 
         // Simple color names (can use flexible matching with these only)

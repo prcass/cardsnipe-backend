@@ -180,6 +180,8 @@ class CardSetsService {
 
   /**
    * Normalize parallel name for consistent matching
+   * NOTE: Do NOT strip suffixes like "prizm" or "refractor" - they are different parallels!
+   * "Orange Prizm" is different from "Orange" in SCP
    */
   normalizeParallel(parallel) {
     if (!parallel) return null;
@@ -189,11 +191,6 @@ class CardSetsService {
     if (p.includes('red') && p.includes('white') && p.includes('blue')) {
       return 'red white blue';
     }
-
-    // Remove common suffixes for matching
-    p = p.replace(/ prizm$/, '');
-    p = p.replace(/ refractor$/, '');
-    p = p.replace(/ holo$/, '');
 
     return p;
   }

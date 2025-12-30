@@ -102,28 +102,73 @@ function isPSA9or10(listing) {
          grade.includes('PSA 10') || grade.includes('PSA 9');
 }
 
+async function logScan(listing, sport, platform, outcome, rejectReason, marketData, dealScore) {
+  try {
+    const itemId = listing.ebayItemId || (platform + '-' + Date.now() + '-' + Math.random().toString(36).slice(2));
+    await db('scan_log').insert({
+      ebay_item_id: itemId,
+      platform: platform,
+      sport: sport,
+      title: listing.title,
+      price: listing.currentPrice,
+      grade: listing.grade || null,
+      year: listing.year || null,
+      set_name: listing.setName || null,
+      card_number: listing.cardNumber || null,
+      parallel: listing.parallel || null,
+      insert_set: listing.insertSet || null,
+      outcome: outcome,
+      reject_reason: rejectReason,
+      market_value: marketData?.value || null,
+      market_source: marketData?.source || null,
+      deal_score: dealScore || null,
+      listing_url: listing.listingUrl,
+      image_url: listing.imageUrl
+    });
+  } catch (e) {
+    // Don't fail the scan if logging fails
+    console.log('  Log error: ' + e.message);
+  }
+}
+
 async function processListings(listings, sport, platform) {
   // Filter to only PSA 9 and 10
-  listings = listings.filter(isPSA9or10);
+  const psa9or10 = listings.filter(isPSA9or10);
+  const notPSA = listings.filter(l => !isPSA9or10(l));
+
+  // Log non-PSA 9/10 as rejected
+  for (const listing of notPSA) {
+    await logScan(listing, sport, platform, 'rejected', 'not PSA 9 or 10', null, null);
+  }
+
   // Filter by price range
-  listings = listings.filter(l => l.currentPrice >= settings.minPrice && l.currentPrice <= settings.maxPrice);
+  const inPriceRange = psa9or10.filter(l => l.currentPrice >= settings.minPrice && l.currentPrice <= settings.maxPrice);
+  const outOfRange = psa9or10.filter(l => l.currentPrice < settings.minPrice || l.currentPrice > settings.maxPrice);
+
+  // Log out-of-range as rejected
+  for (const listing of outOfRange) {
+    await logScan(listing, sport, platform, 'rejected', `price $${listing.currentPrice} outside range`, null, null);
+  }
+
   let saved = 0;
-  for (const listing of listings) {
+  for (const listing of inPriceRange) {
     try {
       const marketData = await getMarketValue(listing, sport);
-      
+
       // Skip if market value unknown - don't guess
       if (marketData === null) {
         console.log('  Skipped (unknown mkt): ' + listing.title.substring(0, 40));
+        await logScan(listing, sport, platform, 'rejected', 'no market value found', null, null);
         continue;
       }
-      
+
       const dealScore = calculateDealScore(listing.currentPrice, marketData.value);
 
       // Log all matched cards with prices
       console.log(`  MATCHED: $${listing.currentPrice} vs mkt $${marketData.value} = ${dealScore}% - ${listing.title.substring(0, 35)}`);
 
       if (dealScore < settings.minDealScore) {
+        await logScan(listing, sport, platform, 'rejected', `deal score ${dealScore}% below min ${settings.minDealScore}%`, marketData, dealScore);
         continue;
       }
 
@@ -151,9 +196,13 @@ async function processListings(listings, sport, platform) {
         });
         saved++;
         console.log(`  >>> DEAL SAVED: Score ${dealScore}% - ${listing.title.substring(0, 40)}`);
+        await logScan(listing, sport, platform, 'saved', null, marketData, dealScore);
+      } else {
+        await logScan(listing, sport, platform, 'matched', 'already exists', marketData, dealScore);
       }
     } catch (e) {
       console.log('  Error saving listing: ' + e.message);
+      await logScan(listing, sport, platform, 'rejected', 'error: ' + e.message, null, null);
     }
   }
   return saved;

@@ -240,6 +240,108 @@ export function getSettings() {
   return appSettings;
 }
 
+// ============================================
+// SCAN LOG & REPORTING API
+// ============================================
+
+// Get scan log with filters
+app.get('/api/scan-log', async (req, res) => {
+  try {
+    const {
+      outcome,       // 'rejected', 'saved', 'matched', 'all'
+      sport,
+      limit = 100,
+      offset = 0
+    } = req.query;
+
+    let query = db('scan_log').orderBy('scanned_at', 'desc');
+
+    if (outcome && outcome !== 'all') {
+      query = query.where('outcome', outcome);
+    }
+
+    if (sport && sport !== 'all') {
+      query = query.where('sport', sport);
+    }
+
+    const logs = await query.limit(parseInt(limit)).offset(parseInt(offset));
+    const total = await db('scan_log').count('* as count').first();
+
+    res.json({
+      success: true,
+      count: logs.length,
+      total: parseInt(total.count),
+      data: logs
+    });
+  } catch (error) {
+    console.error('Error fetching scan log:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Get scan log summary stats
+app.get('/api/scan-log/stats', async (req, res) => {
+  try {
+    const stats = await db('scan_log')
+      .select('outcome')
+      .count('* as count')
+      .groupBy('outcome');
+
+    const byReason = await db('scan_log')
+      .where('outcome', 'rejected')
+      .select('reject_reason')
+      .count('* as count')
+      .groupBy('reject_reason')
+      .orderBy('count', 'desc')
+      .limit(10);
+
+    res.json({
+      success: true,
+      data: {
+        byOutcome: stats,
+        topRejectReasons: byReason
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Report a bad deal/mismatch
+app.post('/api/report', async (req, res) => {
+  try {
+    const { listingId, ebayUrl, scpUrl, issue, notes } = req.body;
+
+    await db('reported_issues').insert({
+      listing_id: listingId || null,
+      ebay_url: ebayUrl,
+      scp_url: scpUrl,
+      issue: issue,  // 'wrong_parallel', 'wrong_price', 'wrong_year', 'other'
+      notes: notes,
+      created_at: new Date()
+    });
+
+    res.json({ success: true, message: 'Report submitted' });
+  } catch (error) {
+    // Table might not exist yet
+    console.error('Error saving report:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Get reported issues
+app.get('/api/reports', async (req, res) => {
+  try {
+    const reports = await db('reported_issues')
+      .orderBy('created_at', 'desc')
+      .limit(50);
+
+    res.json({ success: true, data: reports });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // Stats endpoint
 app.get('/api/stats', async (req, res) => {
   try {

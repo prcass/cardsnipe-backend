@@ -11,7 +11,7 @@
       "years": [2018, 2019, 2020, 2021, 2022, 2023, 2024],
       "parallels": [
         "silver", "gold", "green", "blue", "red", "orange", "purple", "pink", "black", "white",
-        "pink ice", "ice", "red ice", "teal ice", "blue ice", "green ice", "purple ice", "ice gold",
+        "pink ice", "ice", "red ice", "teal ice", "blue ice", "green ice", "purple ice", "orange ice", "ice gold",
         "red white blue", "red white and blue",
         "gold shimmer", "black shimmer", "blue shimmer", "red shimmer",
         "white sparkle", "glitter", "copper glitter", "red glitter",
@@ -346,6 +346,9 @@
     }
   },
   "commonParallels": [
+    "blue refractor", "green refractor", "red refractor", "gold refractor", "purple refractor", "orange refractor", "pink refractor", "black refractor",
+    "blue prizm", "green prizm", "red prizm", "gold prizm", "purple prizm", "orange prizm", "pink prizm",
+    "orange ice", "pink ice", "blue ice", "green ice", "red ice", "purple ice", "teal ice",
     "silver", "gold", "blue", "red", "green", "orange", "purple", "pink", "black", "white",
     "holo", "refractor", "prizm", "mojo", "shimmer", "wave", "pulsar", "velocity", "ice",
     "neon", "hyper", "disco", "camo", "fast break", "scope", "laser", "glitter"
