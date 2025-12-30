@@ -342,6 +342,90 @@ app.get('/api/reports', async (req, res) => {
   }
 });
 
+// ============================================
+// MONITORED PLAYERS API
+// ============================================
+
+// Get all monitored players
+app.get('/api/players', async (req, res) => {
+  try {
+    const players = await db('monitored_players')
+      .orderBy('sport')
+      .orderBy('name');
+    res.json({ success: true, data: players });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Add a new player to monitor
+app.post('/api/players', async (req, res) => {
+  try {
+    const { name, sport } = req.body;
+    if (!name || !sport) {
+      return res.status(400).json({ success: false, error: 'Name and sport are required' });
+    }
+
+    // Check if player already exists
+    const existing = await db('monitored_players')
+      .where({ name: name.trim(), sport: sport.toLowerCase() })
+      .first();
+
+    if (existing) {
+      return res.status(400).json({ success: false, error: 'Player already exists' });
+    }
+
+    const [player] = await db('monitored_players')
+      .insert({ name: name.trim(), sport: sport.toLowerCase(), active: true })
+      .returning('*');
+
+    console.log(`Added player: ${name} (${sport})`);
+    res.json({ success: true, data: player });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Toggle player active status
+app.patch('/api/players/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { active } = req.body;
+
+    const [player] = await db('monitored_players')
+      .where({ id })
+      .update({ active })
+      .returning('*');
+
+    if (!player) {
+      return res.status(404).json({ success: false, error: 'Player not found' });
+    }
+
+    console.log(`Player ${player.name} ${active ? 'enabled' : 'disabled'}`);
+    res.json({ success: true, data: player });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Delete a player
+app.delete('/api/players/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const player = await db('monitored_players').where({ id }).first();
+    if (!player) {
+      return res.status(404).json({ success: false, error: 'Player not found' });
+    }
+
+    await db('monitored_players').where({ id }).del();
+    console.log(`Deleted player: ${player.name}`);
+    res.json({ success: true, message: `Deleted ${player.name}` });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // Stats endpoint
 app.get('/api/stats', async (req, res) => {
   try {

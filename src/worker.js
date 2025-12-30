@@ -42,10 +42,26 @@ async function fetchSettings() {
   }
 }
 
-const MONITORED_PLAYERS = {
-  basketball: ['LeBron James', 'Victor Wembanyama', 'Luka Doncic', 'Anthony Edwards', 'Stephen Curry'],
-  baseball: ['Shohei Ohtani', 'Mike Trout', 'Julio Rodriguez', 'Gunnar Henderson', 'Juan Soto']
-};
+// Players are now loaded from database - see getMonitoredPlayers()
+async function getMonitoredPlayers() {
+  try {
+    const players = await db('monitored_players').where({ active: true });
+    const result = { basketball: [], baseball: [], football: [] };
+    for (const p of players) {
+      if (result[p.sport]) {
+        result[p.sport].push(p.name);
+      }
+    }
+    return result;
+  } catch (e) {
+    console.log('Failed to load players from DB, using defaults:', e.message);
+    // Fallback to defaults if DB not ready
+    return {
+      basketball: ['LeBron James', 'Victor Wembanyama', 'Luka Doncic', 'Anthony Edwards', 'Stephen Curry'],
+      baseball: ['Shohei Ohtani', 'Mike Trout', 'Julio Rodriguez', 'Gunnar Henderson', 'Juan Soto']
+    };
+  }
+}
 
 function buildQueries(player) {
   // Only search for PSA 9 and PSA 10 graded cards
@@ -256,19 +272,33 @@ async function runWorker() {
   while (true) {
     try {
       await fetchSettings();
+      const monitoredPlayers = await getMonitoredPlayers();
+
       console.log('\n=== SCAN ' + new Date().toLocaleTimeString() + ' ===');
       let totalNew = 0;
 
-      console.log('Basketball:');
-      for (const player of MONITORED_PLAYERS.basketball) {
-        console.log(' ' + player + ':');
-        totalNew += await scanPlayer(player, 'basketball');
+      if (monitoredPlayers.basketball.length > 0) {
+        console.log('Basketball:');
+        for (const player of monitoredPlayers.basketball) {
+          console.log(' ' + player + ':');
+          totalNew += await scanPlayer(player, 'basketball');
+        }
       }
 
-      console.log('Baseball:');
-      for (const player of MONITORED_PLAYERS.baseball) {
-        console.log(' ' + player + ':');
-        totalNew += await scanPlayer(player, 'baseball');
+      if (monitoredPlayers.baseball.length > 0) {
+        console.log('Baseball:');
+        for (const player of monitoredPlayers.baseball) {
+          console.log(' ' + player + ':');
+          totalNew += await scanPlayer(player, 'baseball');
+        }
+      }
+
+      if (monitoredPlayers.football && monitoredPlayers.football.length > 0) {
+        console.log('Football:');
+        for (const player of monitoredPlayers.football) {
+          console.log(' ' + player + ':');
+          totalNew += await scanPlayer(player, 'football');
+        }
       }
 
       const stats = await db('listings').where('is_active', true).count('* as count').first();
