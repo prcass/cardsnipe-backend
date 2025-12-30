@@ -60,15 +60,21 @@ export class SportsCardProClient {
 
     // Extract insert set from console name (e.g., "2019 Panini Donruss Optic Splash" → "splash")
     const insertPatterns = [
-      'splash', 'rainmakers', 'all-stars', 'all stars', 'express lane', 'winner stays',
-      'my house', 'fantasy stars', 'slam', 'courtside', 'skyview', 'hoopla', 'ignition',
-      'zero gravity', 'superstars', 'game 7', 'emergent', 'sensational', 'instant impact',
-      'elite dominators', 'supernova'
+      // Multi-word inserts (check first)
+      't minus 3 2 1', 't-minus 3 2 1', 't-minus 3, 2, 1',  // T-Minus 3 2 1 insert
+      'star gazing', 'lights out', 'express lane', 'winner stays', 'my house',
+      'fantasy stars', 'zero gravity', 'game 7', 'instant impact', 'elite dominators',
+      'global reach',
+      // Single-word inserts
+      'splash', 'rainmakers', 'all-stars', 'all stars', 'slam', 'courtside', 'skyview',
+      'hoopla', 'ignition', 'superstars', 'emergent', 'sensational', 'supernova', 'vortex'
     ];
     const consoleLower = consoleName.toLowerCase();
     for (const insert of insertPatterns) {
       if (consoleLower.includes(insert)) {
-        result.insertSet = insert.replace('-', ' ');
+        // Normalize all T-Minus variants to "t minus 3 2 1"
+        let normalized = insert.replace(/-/g, ' ').replace(/,/g, '');
+        result.insertSet = normalized;
         break;
       }
     }
@@ -279,16 +285,21 @@ export class SportsCardProClient {
 
     // Extract insert set name (e.g., "Splash", "Rainmakers", "All-Stars")
     const insertPatterns = [
-      'splash', 'rainmakers', 'all-stars', 'all stars', 'express lane', 'winner stays',
-      'my house', 'fantasy stars', 'slam', 'courtside', 'skyview', 'hoopla', 'ignition',
-      'zero gravity', 'superstars', 'game 7', 'emergent', 'sensational', 'instant impact',
-      'elite dominators', 'supernova'
+      // Multi-word inserts (check first)
+      't minus 3 2 1', 't-minus 3 2 1', 't-minus 3, 2, 1',  // T-Minus 3 2 1 insert
+      'star gazing', 'lights out', 'express lane', 'winner stays', 'my house',
+      'fantasy stars', 'zero gravity', 'game 7', 'instant impact', 'elite dominators',
+      'global reach',
+      // Single-word inserts
+      'splash', 'rainmakers', 'all-stars', 'all stars', 'slam', 'courtside', 'skyview',
+      'hoopla', 'ignition', 'superstars', 'emergent', 'sensational', 'supernova', 'vortex'
     ];
     let insertSet = null;
     const titleLower = title.toLowerCase();
     for (const insert of insertPatterns) {
       if (titleLower.includes(insert)) {
-        insertSet = insert.replace('-', ' ');
+        // Normalize all variants (hyphens, commas) to consistent format
+        insertSet = insert.replace(/-/g, ' ').replace(/,/g, '');
         break;
       }
     }
@@ -430,7 +441,10 @@ export class SportsCardProClient {
 
         // Check for EXACT match on all criteria (normalize types)
         const cardMatch = String(searchNumber) === String(scpData.cardNumber);
-        const yearMatch = String(searchYear) === String(scpData.year);
+        // Year match: allow +/- 1 year for seasons spanning two calendar years (e.g., 2019-20 season)
+        const searchYearNum = parseInt(searchYear, 10);
+        const scpYearNum = parseInt(scpData.year, 10);
+        const yearMatch = !isNaN(searchYearNum) && !isNaN(scpYearNum) && Math.abs(searchYearNum - scpYearNum) <= 1;
         const setMatch = searchSet.toLowerCase() === (scpData.set || '').toLowerCase();
 
         // Parallel matching: be STRICT to avoid false matches
