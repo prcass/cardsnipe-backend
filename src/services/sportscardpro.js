@@ -61,6 +61,7 @@ export class SportsCardProClient {
     // Extract insert set from console name (e.g., "2019 Panini Donruss Optic Splash" → "splash")
     const insertPatterns = [
       // Multi-word inserts (check first)
+      'rookie of the year', 'rookies of the year',  // Baseball Prizm insert
       't minus 3 2 1', 't-minus 3 2 1', 't-minus 3, 2, 1',  // T-Minus 3 2 1 insert
       'star gazing', 'lights out', 'express lane', 'winner stays', 'my house',
       'fantasy stars', 'zero gravity', 'game 7', 'instant impact', 'elite dominators',
@@ -270,6 +271,16 @@ export class SportsCardProClient {
     let parallel = null;
     for (const par of parallels) {
       if (titleUpper.includes(par.toUpperCase())) {
+        // Skip "prizm" if it's part of set name like "Panini Prizm" or "2023 Prizm"
+        // Real Prizm parallels are written as "[Prizm]" or "Prizm Parallel" or with colors like "Blue Prizm"
+        if (par === 'prizm') {
+          // Only count as parallel if it's NOT just part of the set name
+          // Check if there's a color before it (like "Blue Prizm", "Green Prizm")
+          const hasPrizmParallel = /\b(SILVER|GOLD|BLUE|RED|GREEN|ORANGE|PURPLE|PINK|BLACK|WHITE)\s+PRIZM\b/i.test(title);
+          if (!hasPrizmParallel) {
+            continue;  // Skip - "Prizm" is just the set name, not a parallel
+          }
+        }
         // Normalize variants to standard form
         if (par.includes('red') && par.includes('white') && par.includes('blue')) {
           parallel = 'red white blue';
@@ -286,6 +297,7 @@ export class SportsCardProClient {
     // Extract insert set name (e.g., "Splash", "Rainmakers", "All-Stars")
     const insertPatterns = [
       // Multi-word inserts (check first)
+      'rookie of the year', 'rookies of the year',  // Baseball Prizm insert
       't minus 3 2 1', 't-minus 3 2 1', 't-minus 3, 2, 1',  // T-Minus 3 2 1 insert
       'star gazing', 'lights out', 'express lane', 'winner stays', 'my house',
       'fantasy stars', 'zero gravity', 'game 7', 'instant impact', 'elite dominators',
