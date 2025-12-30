@@ -174,25 +174,18 @@ async function incrementScanCount(count) {
 }
 
 async function processListings(listings, sport, platform) {
-  // Note: Scan count is now incremented in the eBay/COMC clients before filtering
-
-  // Filter to only PSA 9 and 10
-  const psa9or10 = listings.filter(isPSA9or10);
-  const notPSA = listings.filter(l => !isPSA9or10(l));
-
-  // Silently log non-PSA 9/10 as rejected (don't spam console)
-  for (const listing of notPSA) {
-    await logScan(listing, sport, platform, 'rejected', 'not PSA 9 or 10', null, null);
-  }
+  // Listings are already filtered to PSA 9/10 by the eBay client
 
   // Filter by price range
-  const inPriceRange = psa9or10.filter(l => l.currentPrice >= settings.minPrice && l.currentPrice <= settings.maxPrice);
-  const outOfRange = psa9or10.filter(l => l.currentPrice < settings.minPrice || l.currentPrice > settings.maxPrice);
+  const inPriceRange = listings.filter(l => l.currentPrice >= settings.minPrice && l.currentPrice <= settings.maxPrice);
+  const outOfRange = listings.filter(l => l.currentPrice < settings.minPrice || l.currentPrice > settings.maxPrice);
 
-  // Silently log out-of-range as rejected
-  for (const listing of outOfRange) {
-    await logScan(listing, sport, platform, 'rejected', `price $${listing.currentPrice} outside range`, null, null);
-  }
+  // Increment scan count for qualified cards (PSA 9/10 + in price range)
+  // These are the cards we're actually examining for deals
+  await incrementScanCount(inPriceRange.length);
+
+  // Silently log out-of-range as rejected (don't log to scan_log, just skip)
+  // We only care about qualified candidates in the scan log
 
   let saved = 0;
   for (const listing of inPriceRange) {

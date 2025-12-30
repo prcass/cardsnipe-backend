@@ -177,12 +177,13 @@ app.post('/api/watchlist', async (req, res) => {
 // Clear all listings (for removing demo/test data)
 app.delete('/api/clear-data', async (req, res) => {
   try {
-    const deleted = await db('listings').del();
+    const deletedListings = await db('listings').del();
+    const deletedScanLog = await db('scan_log').del();
     // Reset scan counter
     scanCounter.total = 0;
     scanCounter.lastReset = new Date();
-    console.log('Cleared ' + deleted + ' listings from database, reset scan counter');
-    res.json({ success: true, deleted });
+    console.log('Cleared ' + deletedListings + ' listings, ' + deletedScanLog + ' scan log entries, reset scan counter');
+    res.json({ success: true, deleted: deletedListings, scanLogDeleted: deletedScanLog });
   } catch (error) {
     console.error('Error clearing data:', error);
     res.status(500).json({ success: false, error: error.message });

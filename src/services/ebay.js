@@ -125,28 +125,8 @@ export class EbayClient {
     const data = await response.json();
     const allListings = this.transformListings(data.itemSummaries || []);
 
-    // Increment scan count for ALL cards examined (before filtering)
-    await this.incrementScanCount(allListings.length);
-
     // Filter to only PSA 9 and PSA 10 graded cards
     return allListings.filter(listing => this.isPSA9or10(listing));
-  }
-
-  /**
-   * Increment scan counter on server
-   */
-  async incrementScanCount(count) {
-    if (count <= 0) return;
-    try {
-      const serverUrl = process.env.SERVER_URL || 'http://localhost:3001';
-      await fetch(serverUrl + '/api/scan-count/increment', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ count })
-      });
-    } catch (e) {
-      // Silent fail
-    }
   }
 
   /**
