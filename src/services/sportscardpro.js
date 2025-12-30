@@ -135,13 +135,9 @@ export class SportsCardProClient {
       throw new Error('SPORTSCARDPRO_TOKEN not configured');
     }
 
-    // Add sport to query to help filter results (API has no category parameter)
-    let searchQuery = query;
-    if (sport && !query.toLowerCase().includes(sport)) {
-      searchQuery = `${sport} ${query}`;
-    }
-
-    const url = `${this.baseUrl}/api/products?t=${this.token}&q=${encodeURIComponent(searchQuery)}`;
+    // Simple query - just the player name
+    // API uses OR matching so extra keywords cause false matches
+    const url = `${this.baseUrl}/api/products?t=${this.token}&q=${encodeURIComponent(query)}`;
 
     try {
       const response = await fetch(url, {
@@ -325,18 +321,11 @@ export class SportsCardProClient {
       }
     }
 
-    // Add "cards" to query to prioritize trading cards over Funko POPs
+    // SIMPLE query - just player name to avoid OR keyword matching issues
+    // The API matches ANY keyword, so "LeBron James Prizm" matches cards with just "James"
+    // We'll filter by set/year/number in the results instead
     let query = cleanPlayer || '';
-    if (searchSet) query += ' ' + searchSet;
-    if (searchYear) query += ' ' + searchYear;
-    if (searchNumber) query += ' #' + searchNumber;
-    if (searchParallel) query += ' ' + searchParallel;
-    if (searchIsAuto) query += ' auto';
     query = query.trim();
-    // Append "cards" to help filter out Funko POPs from results
-    if (query && !query.toLowerCase().includes('card')) {
-      query += ' cards';
-    }
 
     if (!query || query.length < 5) {
       console.log('  SportsCardPro: Query too short, skipping');
@@ -344,10 +333,9 @@ export class SportsCardProClient {
     }
 
     if (searchParallel || searchIsAuto) {
-      console.log(`  SportsCardPro: Detected parallel=${searchParallel || 'none'}, auto=${searchIsAuto}`);
+      console.log(`  SportsCardPro: Filters: set=${searchSet || 'any'}, year=${searchYear || 'any'}, parallel=${searchParallel || 'none'}, auto=${searchIsAuto}`);
     }
-    // Log what we're searching (sport will be prepended in searchCards)
-    console.log(`  SportsCardPro: Searching "${searchSport ? searchSport + ' ' : ''}${query}"`);
+    console.log(`  SportsCardPro: Searching "${query}"`);
 
     try {
       const products = await this.searchCards(query, searchSport);
