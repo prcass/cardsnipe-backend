@@ -400,13 +400,29 @@ export class EbayClient {
       }
     }
 
-    // Detect parallels
-    const parallels = ['SILVER', 'GOLD', 'RED', 'BLUE', 'GREEN', 'ORANGE', 'PURPLE', 'BLACK', 'PINK',
-                       'SHIMMER', 'HOLO', 'REFRACTOR', 'MOJO', 'SCOPE', 'WAVE', 'PULSAR', 'HYPER',
-                       'DISCO', 'TIGER', 'CAMO', 'ICE', 'NEON', 'LASER', 'FAST BREAK'];
+    // Detect parallels - IMPORTANT: Check multi-word parallels FIRST before single colors
+    const parallels = [
+      // Multi-word parallels (must check first)
+      'RED/WHITE/BLUE', 'RED WHITE BLUE', 'RED, WHITE, BLUE',
+      'BLUE VELOCITY', 'RED VELOCITY', 'GREEN VELOCITY', 'ORANGE VELOCITY', 'PURPLE VELOCITY',
+      'BLUE PULSAR', 'GREEN PULSAR', 'RED PULSAR', 'ORANGE PULSAR', 'PURPLE PULSAR',
+      'PINK ICE', 'RED ICE', 'BLUE ICE', 'GREEN ICE', 'PURPLE ICE',
+      'FAST BREAK', 'BLACK GOLD', 'BLUE SHIMMER', 'GOLD SHIMMER', 'RED SHIMMER',
+      'BLUE WAVE', 'RED WAVE', 'GOLD WAVE', 'HYPER BLUE', 'HYPER PINK', 'HYPER RED',
+      'NEON GREEN', 'NEON ORANGE', 'NEON PINK', 'TIGER CAMO',
+      // Single-word parallels (check after compound names)
+      'SILVER', 'GOLD', 'BLUE', 'RED', 'GREEN', 'ORANGE', 'PURPLE', 'BLACK', 'PINK', 'WHITE',
+      'SHIMMER', 'HOLO', 'REFRACTOR', 'MOJO', 'SCOPE', 'WAVE', 'PULSAR', 'HYPER',
+      'DISCO', 'TIGER', 'CAMO', 'ICE', 'NEON', 'LASER', 'VELOCITY', 'PRIZM'
+    ];
     for (const parallel of parallels) {
       if (titleUpper.includes(parallel)) {
-        result.parallel = parallel.charAt(0) + parallel.slice(1).toLowerCase();
+        // Normalize RWB variants
+        if (parallel.includes('RED') && parallel.includes('WHITE') && parallel.includes('BLUE')) {
+          result.parallel = 'red white blue';
+        } else {
+          result.parallel = parallel.toLowerCase();
+        }
         break;
       }
     }
