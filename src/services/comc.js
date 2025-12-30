@@ -168,11 +168,22 @@ export class COMCClient {
         });
       }
 
-      return listings;
+      // Filter to only PSA 9 and PSA 10 graded cards
+      return listings.filter(listing => this.isPSA9or10(listing));
 
     } catch (error) {
       return [];
     }
+  }
+
+  /**
+   * Check if a listing is PSA 9 or PSA 10
+   */
+  isPSA9or10(listing) {
+    const title = (listing.title || '').toUpperCase();
+    const grade = (listing.grade || '').toUpperCase();
+    return title.includes('PSA 10') || title.includes('PSA 9') ||
+           grade === 'PSA 10' || grade === 'PSA 9';
   }
 
   /**
