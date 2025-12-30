@@ -1,0 +1,360 @@
+{
+  "metadata": {
+    "source": "SportsCardPro",
+    "lastUpdated": "2024-12-30",
+    "sports": ["basketball", "baseball", "football"]
+  },
+  "sets": {
+    "prizm": {
+      "name": "Prizm",
+      "manufacturer": "Panini",
+      "years": [2018, 2019, 2020, 2021, 2022, 2023, 2024],
+      "parallels": [
+        "silver", "gold", "green", "blue", "red", "orange", "purple", "pink", "black", "white",
+        "pink ice", "ice", "red ice", "teal ice", "blue ice", "green ice", "purple ice", "ice gold",
+        "red white blue", "red white and blue",
+        "gold shimmer", "black shimmer", "blue shimmer", "red shimmer",
+        "white sparkle", "glitter", "copper glitter", "red glitter",
+        "mojo", "tiger stripe", "tiger camo",
+        "neon green", "neon orange", "neon pink",
+        "hyper", "hyper blue", "hyper pink", "hyper red", "hyper green", "hyper orange",
+        "disco", "disco blue", "disco red", "disco gold",
+        "snakeskin", "camo", "blue camo", "green camo",
+        "prizm", "blue prizm", "green prizm", "red prizm", "gold prizm", "orange prizm", "purple prizm",
+        "choice nebula", "choice cherry blossom", "choice tiger stripe",
+        "fast break", "fast break neon green",
+        "lotus flower",
+        "fotl", "first off the line"
+      ],
+      "inserts": [
+        "emergent", "sensational", "instant impact", "freshman phenoms", "brilliance",
+        "fireworks", "widescreen", "dominance", "fearless", "kobe tribute",
+        "usa basketball", "mvp", "all-stars", "slam dunk", "lottery picks",
+        "rookie signatures", "sensational signatures"
+      ]
+    },
+    "optic": {
+      "name": "Donruss Optic",
+      "alternateNames": ["Donruss Optic", "Panini Donruss Optic", "Optic"],
+      "manufacturer": "Panini",
+      "years": [2018, 2019, 2020, 2021, 2022, 2023, 2024],
+      "parallels": [
+        "silver", "holo", "silver holo",
+        "blue", "red", "green", "orange", "purple", "pink", "gold", "black", "white",
+        "blue velocity", "red velocity", "green velocity", "orange velocity", "purple velocity", "black velocity",
+        "hyper pink", "hyper green", "hyper orange", "hyper blue", "hyper red",
+        "purple shock", "shock",
+        "blue mojo", "blue mojo choice", "mojo",
+        "pink", "copper glitter", "red glitter", "glitter",
+        "gold vinyl", "gold vinyl signature",
+        "fast break", "fast break holo",
+        "pandora", "black pandora", "black pandora signature",
+        "pulsar", "blue pulsar", "green pulsar", "red pulsar", "orange pulsar", "purple pulsar",
+        "wave", "blue wave", "red wave", "gold wave"
+      ],
+      "inserts": [
+        "splash", "express lane", "my house", "t minus 3 2 1", "t-minus 3 2 1",
+        "elite dominators", "fantasy stars", "winner stays", "courtside",
+        "all-stars", "all stars", "star gazing", "lights out",
+        "downtown", "retro", "rated rookies", "the rookies", "holo",
+        "contenders", "signatures", "mvp", "all-star weekend"
+      ]
+    },
+    "mosaic": {
+      "name": "Mosaic",
+      "manufacturer": "Panini",
+      "years": [2019, 2020, 2021, 2022, 2023, 2024],
+      "parallels": [
+        "silver", "green", "blue", "red", "pink", "gold", "black", "white",
+        "mosaic", "genesis",
+        "reactive blue", "reactive yellow", "reactive green", "reactive red",
+        "red seismic", "seismic",
+        "green fluorescent", "fluorescent",
+        "glitter", "sparkle",
+        "peacock", "peacock choice",
+        "camo", "camo pink", "blue camo", "green camo",
+        "fast break", "silver fast break",
+        "stained glass", "disco"
+      ],
+      "inserts": [
+        "jam masters", "will to win", "overdrive", "flea flicker", "scripts",
+        "center stage", "swagger", "montage", "stare down", "mvp",
+        "national pride", "hall of fame"
+      ]
+    },
+    "select": {
+      "name": "Select",
+      "manufacturer": "Panini",
+      "years": [2018, 2019, 2020, 2021, 2022, 2023, 2024],
+      "tiers": ["concourse", "premier", "courtside"],
+      "parallels": [
+        "silver", "blue", "red", "green", "orange", "purple", "gold", "black", "white",
+        "tie-dye", "tie dye",
+        "zebra", "tiger", "tiger stripe",
+        "disco", "disco silver",
+        "white shimmer", "gold shimmer", "shimmer",
+        "snakeskin", "elephant",
+        "neon green", "neon orange", "neon pink",
+        "fast break", "scope", "mojo"
+      ],
+      "inserts": [
+        "in flight", "x-factor", "sparks", "phenomenon", "city limits",
+        "clutch", "sky's the limit", "certified", "signatures"
+      ]
+    },
+    "hoops": {
+      "name": "Hoops",
+      "alternateNames": ["NBA Hoops", "Panini Hoops"],
+      "manufacturer": "Panini",
+      "years": [2018, 2019, 2020, 2021, 2022, 2023, 2024],
+      "parallels": [
+        "silver", "gold", "blue", "red", "green", "orange", "purple", "teal",
+        "holo", "artist proof", "artist proof gold", "artist proof silver",
+        "neon green", "neon orange", "neon pink",
+        "explosion", "gold explosion",
+        "premium stock", "pulsar", "flash", "lazer"
+      ],
+      "inserts": [
+        "zero gravity", "hoopla", "slam", "skyview", "high voltage",
+        "lights camera action", "class action", "rookie special",
+        "courtside", "road to the finals", "winter", "haunted hoops"
+      ]
+    },
+    "donruss": {
+      "name": "Donruss",
+      "manufacturer": "Panini",
+      "years": [2018, 2019, 2020, 2021, 2022, 2023, 2024],
+      "parallels": [
+        "silver", "gold", "blue", "red", "green", "orange", "purple",
+        "holo", "holo blue", "holo green", "holo orange", "holo purple",
+        "press proof", "press proof blue", "press proof gold", "press proof silver",
+        "laser", "blue laser", "green laser", "red laser", "gold laser"
+      ],
+      "inserts": [
+        "rated rookies", "franchise features", "all-stars", "court kings",
+        "swishful thinking", "net marvels", "bomb squad", "great x-pectations",
+        "the rookies", "elite series", "retro"
+      ]
+    },
+    "revolution": {
+      "name": "Revolution",
+      "manufacturer": "Panini",
+      "years": [2018, 2019, 2020, 2021, 2022, 2023, 2024],
+      "parallels": [
+        "cosmic", "galactic", "lava", "sunburst", "cubic", "fractal",
+        "astro", "nova", "groove", "impact",
+        "chinese new year", "new year",
+        "vortex", "holo", "infinite"
+      ],
+      "inserts": [
+        "kaboom", "supernova", "vortex", "shock wave", "rookies", "rookie revolution"
+      ]
+    },
+    "contenders": {
+      "name": "Contenders",
+      "alternateNames": ["Panini Contenders", "Contenders Optic"],
+      "manufacturer": "Panini",
+      "years": [2018, 2019, 2020, 2021, 2022, 2023, 2024],
+      "parallels": [
+        "silver", "gold", "blue", "red", "green", "orange", "purple", "cracked ice",
+        "championship ticket", "playoff ticket", "variation", "auto", "autograph"
+      ],
+      "inserts": [
+        "rookie ticket", "draft picks", "legacy", "mvp contenders", "hall of fame",
+        "license to dominate", "rookie of the year", "lottery ticket"
+      ]
+    },
+    "chronicles": {
+      "name": "Chronicles",
+      "manufacturer": "Panini",
+      "years": [2018, 2019, 2020, 2021, 2022, 2023],
+      "subbrands": [
+        "prizm update", "optic update", "mosaic", "select", "crusade", "hometown heroes",
+        "playbook", "limited", "origins", "threads", "studio", "elite", "titanium",
+        "gala", "noir", "spectra", "vertex", "xr", "absolute", "rookies and stars",
+        "crown royale", "national treasures", "marquee", "prestige", "donruss",
+        "essentials", "recon", "illusions", "phoenix", "score", "classics",
+        "cornerstones", "plates and patches", "certified", "panini", "status"
+      ],
+      "parallels": [
+        "silver", "gold", "blue", "red", "green", "orange", "purple", "pink", "teal",
+        "holo", "neon", "shimmer"
+      ]
+    },
+    "origins": {
+      "name": "Origins",
+      "manufacturer": "Panini",
+      "years": [2019, 2020, 2021, 2022, 2023, 2024],
+      "parallels": [
+        "silver", "gold", "blue", "red", "green", "orange", "purple", "turquoise",
+        "gold vinyl"
+      ],
+      "inserts": [
+        "rookie booklet", "rookie autographs", "patch autographs", "once upon a time"
+      ]
+    },
+    "crown-royale": {
+      "name": "Crown Royale",
+      "manufacturer": "Panini",
+      "years": [2018, 2019, 2020, 2021, 2022, 2023, 2024],
+      "parallels": [
+        "crystal", "gold", "blue", "red", "green", "purple", "platinum",
+        "die-cut", "kaboom"
+      ],
+      "inserts": [
+        "heirs to the throne", "lords of the court", "pillars", "jewels", "knights"
+      ]
+    },
+    "noir": {
+      "name": "Noir",
+      "manufacturer": "Panini",
+      "years": [2019, 2020, 2021, 2022, 2023, 2024],
+      "parallels": [
+        "spotlight", "metal frame", "gold", "platinum", "holo gold", "holo black"
+      ],
+      "inserts": [
+        "color", "association", "icon", "autographs", "rookie patch auto"
+      ]
+    },
+    "spectra": {
+      "name": "Spectra",
+      "manufacturer": "Panini",
+      "years": [2018, 2019, 2020, 2021, 2022, 2023, 2024],
+      "parallels": [
+        "gold", "blue", "celestial", "interstellar", "nebula", "neon blue", "neon green", "neon orange", "neon pink",
+        "meta", "marble"
+      ],
+      "inserts": [
+        "aspiring", "fundamentals", "locked in", "catalysts", "autographs"
+      ]
+    },
+    "obsidian": {
+      "name": "Obsidian",
+      "manufacturer": "Panini",
+      "years": [2019, 2020, 2021, 2022, 2023, 2024],
+      "parallels": [
+        "orange etch", "green etch", "electric etch", "vitreous", "color blast",
+        "contra", "matrix", "orange flood"
+      ],
+      "inserts": [
+        "lightning strike", "tunnel vision", "aurora", "supernova", "autographs"
+      ]
+    },
+    "recon": {
+      "name": "Recon",
+      "manufacturer": "Panini",
+      "years": [2020, 2021, 2022, 2023, 2024],
+      "parallels": [
+        "silver", "gold", "blue", "green", "purple", "holo"
+      ],
+      "inserts": [
+        "hard target", "scopes", "head shots", "rookies", "autographs"
+      ]
+    },
+    "illusions": {
+      "name": "Illusions",
+      "manufacturer": "Panini",
+      "years": [2019, 2020, 2021, 2022, 2023],
+      "parallels": [
+        "silver", "gold", "orange", "blue", "starlight", "sapphire", "ruby", "emerald",
+        "mystique", "astral", "trophy"
+      ],
+      "inserts": [
+        "clear shots", "living legends", "vision", "rookie reflections"
+      ]
+    },
+    "certified": {
+      "name": "Certified",
+      "alternateNames": ["Totally Certified"],
+      "manufacturer": "Panini",
+      "years": [2018, 2019, 2020, 2024],
+      "parallels": [
+        "mirror", "mirror blue", "mirror red", "mirror gold", "mirror orange", "mirror green",
+        "camo", "gold team"
+      ],
+      "inserts": [
+        "fabric of the game", "new generation", "freshman fabric", "skills", "epix"
+      ]
+    },
+    "flux": {
+      "name": "Flux",
+      "manufacturer": "Panini",
+      "years": [2020, 2021, 2022],
+      "parallels": [
+        "silver", "gold", "blue", "green", "red", "orange", "purple"
+      ],
+      "inserts": [
+        "approach", "career high", "court generals", "jolt"
+      ]
+    },
+    "impeccable": {
+      "name": "Impeccable",
+      "manufacturer": "Panini",
+      "years": [2020, 2021, 2022, 2023],
+      "parallels": [
+        "silver", "gold", "platinum"
+      ],
+      "inserts": [
+        "elegance", "stainless stars", "career stats", "autographs"
+      ]
+    },
+    "court-kings": {
+      "name": "Court Kings",
+      "manufacturer": "Panini",
+      "years": [2021, 2023, 2024],
+      "parallels": [
+        "ruby", "sapphire", "emerald", "amethyst", "aurora", "acetate"
+      ],
+      "inserts": [
+        "fresh paint", "portraits", "heir apparent", "points in paint", "legacies"
+      ]
+    },
+    "prizm-draft-picks": {
+      "name": "Prizm Draft Picks",
+      "manufacturer": "Panini",
+      "years": [2019, 2020, 2021, 2022, 2023, 2024],
+      "parallels": [
+        "silver", "gold", "blue", "red", "green", "orange", "purple", "pink",
+        "pink pulsar", "blue pulsar", "green pulsar", "neon green", "mojo", "tiger stripe"
+      ],
+      "inserts": [
+        "all-american", "rated prospect", "rookie signatures", "crusade"
+      ]
+    },
+    "hoops-premium-stock": {
+      "name": "Hoops Premium Stock",
+      "manufacturer": "Panini",
+      "years": [2019, 2020, 2023],
+      "parallels": [
+        "silver", "gold", "blue", "red", "green", "orange", "purple",
+        "pulsar", "flash", "lazer", "shimmer"
+      ],
+      "inserts": [
+        "zero gravity", "courtside", "high voltage", "slam", "lights camera action"
+      ]
+    },
+    "one-and-one": {
+      "name": "One and One",
+      "manufacturer": "Panini",
+      "years": [2019, 2020, 2021, 2022, 2023, 2024],
+      "parallels": [
+        "gold", "blue", "red", "green", "purple", "downtown"
+      ],
+      "inserts": [
+        "first team all-americans", "downtown", "timeless", "autographs"
+      ]
+    }
+  },
+  "commonParallels": [
+    "silver", "gold", "blue", "red", "green", "orange", "purple", "pink", "black", "white",
+    "holo", "refractor", "prizm", "mojo", "shimmer", "wave", "pulsar", "velocity", "ice",
+    "neon", "hyper", "disco", "camo", "fast break", "scope", "laser", "glitter"
+  ],
+  "commonInserts": [
+    "splash", "express lane", "my house", "t minus 3 2 1", "star gazing", "lights out",
+    "zero gravity", "hoopla", "slam", "skyview", "kaboom", "downtown",
+    "emergent", "sensational", "instant impact", "elite dominators",
+    "all-stars", "all stars", "courtside", "contenders", "rookie of the year",
+    "rated rookies", "rookie signatures", "fantasy stars", "winner stays"
+  ]
+}

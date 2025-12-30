@@ -7,6 +7,7 @@
 
 import fetch from 'node-fetch';
 import { PSAClient } from './psa.js';
+import { cardSets } from './card-sets.js';
 
 const psa = new PSAClient();
 const hasPSACredentials = process.env.PSA_ACCESS_TOKEN || (process.env.PSA_USERNAME && process.env.PSA_PASSWORD);
@@ -58,27 +59,8 @@ export class SportsCardProClient {
       result.parallel = parallelMatch[1].toLowerCase().trim();
     }
 
-    // Extract insert set from console name (e.g., "2019 Panini Donruss Optic Splash" → "splash")
-    const insertPatterns = [
-      // Multi-word inserts (check first)
-      'rookie of the year', 'rookies of the year',  // Baseball Prizm insert
-      't minus 3 2 1', 't-minus 3 2 1', 't-minus 3, 2, 1',  // T-Minus 3 2 1 insert
-      'star gazing', 'lights out', 'express lane', 'winner stays', 'my house',
-      'fantasy stars', 'zero gravity', 'game 7', 'instant impact', 'elite dominators',
-      'global reach',
-      // Single-word inserts
-      'splash', 'rainmakers', 'all-stars', 'all stars', 'slam', 'courtside', 'skyview',
-      'hoopla', 'ignition', 'superstars', 'emergent', 'sensational', 'supernova', 'vortex'
-    ];
-    const consoleLower = consoleName.toLowerCase();
-    for (const insert of insertPatterns) {
-      if (consoleLower.includes(insert)) {
-        // Normalize all T-Minus variants to "t minus 3 2 1"
-        let normalized = insert.replace(/-/g, ' ').replace(/,/g, '');
-        result.insertSet = normalized;
-        break;
-      }
-    }
+    // Extract insert set from console name using CardSets data service
+    result.insertSet = cardSets.detectInsert(consoleName);
 
     // Extract set from console name
     const setPatterns = [
@@ -247,74 +229,14 @@ export class SportsCardProClient {
       }
     }
 
-    // Extract parallel/color variant
-    // IMPORTANT: Check multi-word parallels FIRST before single colors
-    // Otherwise "Blue Velocity" matches "Blue" and stops
-    const parallels = [
-      // Multi-word parallels (must check first)
-      'red/white/blue', 'red white blue', 'red, white, blue', 'red white and blue',  // RWB variants
-      'blue velocity', 'red velocity', 'green velocity', 'orange velocity', 'purple velocity',
-      'blue pulsar', 'green pulsar', 'red pulsar', 'orange pulsar', 'purple pulsar',
-      'pink ice', 'red ice', 'blue ice', 'green ice', 'purple ice',
-      'fast break', 'instant impact', 'black gold',
-      'blue shimmer', 'gold shimmer', 'red shimmer',
-      'blue wave', 'red wave', 'gold wave',
-      'hyper blue', 'hyper pink', 'hyper red',
-      'neon green', 'neon orange', 'neon pink',
-      'tiger camo', 'blue camo', 'green camo',
-      'disco blue', 'disco red', 'disco gold',
-      // Single-word parallels (check after compound names)
-      'silver', 'gold', 'blue', 'red', 'green', 'orange', 'purple', 'pink', 'black', 'white',
-      'holo', 'refractor', 'wave', 'shimmer', 'disco', 'tiger', 'camo', 'ice', 'neon', 'pulsar',
-      'hyper', 'velocity', 'prizm', 'mojo', 'scope', 'fluorescent'
-    ];
-    let parallel = null;
-    for (const par of parallels) {
-      if (titleUpper.includes(par.toUpperCase())) {
-        // Skip "prizm" if it's part of set name like "Panini Prizm" or "2023 Prizm"
-        // Real Prizm parallels are written as "[Prizm]" or "Prizm Parallel" or with colors like "Blue Prizm"
-        if (par === 'prizm') {
-          // Only count as parallel if it's NOT just part of the set name
-          // Check if there's a color before it (like "Blue Prizm", "Green Prizm")
-          const hasPrizmParallel = /\b(SILVER|GOLD|BLUE|RED|GREEN|ORANGE|PURPLE|PINK|BLACK|WHITE)\s+PRIZM\b/i.test(title);
-          if (!hasPrizmParallel) {
-            continue;  // Skip - "Prizm" is just the set name, not a parallel
-          }
-        }
-        // Normalize variants to standard form
-        if (par.includes('red') && par.includes('white') && par.includes('blue')) {
-          parallel = 'red white blue';
-        } else {
-          parallel = par;
-        }
-        break;
-      }
-    }
+    // Extract parallel/color variant using CardSets data service
+    const parallel = cardSets.detectParallel(title);
 
     // Check for autograph
     const isAuto = titleUpper.includes('AUTO') || titleUpper.includes('AUTOGRAPH') || titleUpper.includes('SIGNED');
 
-    // Extract insert set name (e.g., "Splash", "Rainmakers", "All-Stars")
-    const insertPatterns = [
-      // Multi-word inserts (check first)
-      'rookie of the year', 'rookies of the year',  // Baseball Prizm insert
-      't minus 3 2 1', 't-minus 3 2 1', 't-minus 3, 2, 1',  // T-Minus 3 2 1 insert
-      'star gazing', 'lights out', 'express lane', 'winner stays', 'my house',
-      'fantasy stars', 'zero gravity', 'game 7', 'instant impact', 'elite dominators',
-      'global reach',
-      // Single-word inserts
-      'splash', 'rainmakers', 'all-stars', 'all stars', 'slam', 'courtside', 'skyview',
-      'hoopla', 'ignition', 'superstars', 'emergent', 'sensational', 'supernova', 'vortex'
-    ];
-    let insertSet = null;
-    const titleLower = title.toLowerCase();
-    for (const insert of insertPatterns) {
-      if (titleLower.includes(insert)) {
-        // Normalize all variants (hyphens, commas) to consistent format
-        insertSet = insert.replace(/-/g, ' ').replace(/,/g, '');
-        break;
-      }
-    }
+    // Extract insert set name using CardSets data service
+    const insertSet = cardSets.detectInsert(title);
 
     return { year, set, cardNumber, player, parallel, isAuto, insertSet };
   }
