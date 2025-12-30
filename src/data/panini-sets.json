@@ -350,7 +350,7 @@
     "blue prizm", "green prizm", "red prizm", "gold prizm", "purple prizm", "orange prizm", "pink prizm",
     "orange ice", "pink ice", "blue ice", "green ice", "red ice", "purple ice", "teal ice",
     "silver", "gold", "blue", "red", "green", "orange", "purple", "pink", "black", "white",
-    "holo", "refractor", "prizm", "mojo", "shimmer", "wave", "pulsar", "velocity", "ice",
+    "holo", "mojo", "shimmer", "wave", "pulsar", "velocity", "ice",
     "neon", "hyper", "disco", "camo", "fast break", "scope", "laser", "glitter"
   ],
   "commonInserts": [
