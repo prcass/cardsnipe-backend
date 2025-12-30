@@ -164,7 +164,7 @@ async function incrementScanCount(count) {
   if (count <= 0) return;
   try {
     const serverUrl = process.env.SERVER_URL || 'http://localhost:3001';
-    console.log(`  [Scan count +${count}]`);
+    console.log(`  [Scan count +${count}] → ${serverUrl}`);
     const resp = await fetch(serverUrl + '/api/scan-count/increment', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -287,6 +287,7 @@ async function scanPlayer(player, sport) {
 
 async function runWorker() {
   console.log('CardSnipe Worker | Source: eBay' + (hasEbayKeys ? '' : ' (no keys configured!)'));
+  console.log('SERVER_URL: ' + (process.env.SERVER_URL || 'NOT SET (using localhost:3001)'));
 
   while (true) {
     try {
