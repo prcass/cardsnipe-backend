@@ -316,6 +316,12 @@ export class SportsCardProClient {
 
       for (const p of products) {
         const productName = (p['product-name'] || '').toLowerCase();
+        const consoleName = (p['console-name'] || '').toLowerCase();
+
+        // MUST be actual cards, not Funko POPs
+        if (!consoleName.includes('cards')) {
+          continue;
+        }
 
         // Require BOTH first and last name to be in the product name
         // This prevents "James Bond" matching for "LeBron James"
