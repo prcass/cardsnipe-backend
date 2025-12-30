@@ -34,6 +34,7 @@ export class SportsCardProClient {
     const result = {
       year: null,
       set: null,
+      insertSet: null,  // Insert sets like Splash, Rainmakers, All-Stars
       cardNumber: null,
       parallel: null,
       isAuto: false
@@ -53,8 +54,22 @@ export class SportsCardProClient {
       result.parallel = parallelMatch[1].toLowerCase().trim();
     }
 
+    // Extract insert set from console name (e.g., "2019 Panini Donruss Optic Splash" → "splash")
+    const insertPatterns = [
+      'splash', 'rainmakers', 'all-stars', 'all stars', 'express lane', 'winner stays',
+      'my house', 'fantasy stars', 'slam', 'courtside', 'skyview', 'hoopla', 'ignition',
+      'zero gravity', 'superstars', 'game 7', 'emergent', 'sensational', 'instant impact',
+      'elite dominators', 'supernova'
+    ];
+    const consoleLower = consoleName.toLowerCase();
+    for (const insert of insertPatterns) {
+      if (consoleLower.includes(insert)) {
+        result.insertSet = insert.replace('-', ' ');
+        break;
+      }
+    }
+
     // Extract set from console name
-    const consoleUpper = consoleName.toUpperCase();
     const setPatterns = [
       { pattern: /PRIZM\s+GLOBAL\s+REACH/i, name: 'prizm global reach' },
       { pattern: /PRIZM\s+DRAFT\s+PICKS/i, name: 'prizm draft picks' },
@@ -252,7 +267,23 @@ export class SportsCardProClient {
     // Check for autograph
     const isAuto = titleUpper.includes('AUTO') || titleUpper.includes('AUTOGRAPH') || titleUpper.includes('SIGNED');
 
-    return { year, set, cardNumber, player, parallel, isAuto };
+    // Extract insert set name (e.g., "Splash", "Rainmakers", "All-Stars")
+    const insertPatterns = [
+      'splash', 'rainmakers', 'all-stars', 'all stars', 'express lane', 'winner stays',
+      'my house', 'fantasy stars', 'slam', 'courtside', 'skyview', 'hoopla', 'ignition',
+      'zero gravity', 'superstars', 'game 7', 'emergent', 'sensational', 'instant impact',
+      'elite dominators', 'supernova'
+    ];
+    let insertSet = null;
+    const titleLower = title.toLowerCase();
+    for (const insert of insertPatterns) {
+      if (titleLower.includes(insert)) {
+        insertSet = insert.replace('-', ' ');
+        break;
+      }
+    }
+
+    return { year, set, cardNumber, player, parallel, isAuto, insertSet };
   }
 
   /**
@@ -267,6 +298,7 @@ export class SportsCardProClient {
     let searchGrade = grade;
     let searchParallel = parallel || null;  // Use passed parallel if provided
     let searchIsAuto = false;
+    let searchInsertSet = null;  // Insert sets like Splash, Rainmakers, All-Stars
     const searchSport = sport;
 
     // Extract grade from title if not provided
@@ -283,13 +315,14 @@ export class SportsCardProClient {
       }
     }
 
-    // Parse title for player name and auto status if needed
+    // Parse title for player name, auto status, and insert set
     if (player && player.length > 30) {
       const parsed = this.parseTitle(player);
       if (!searchYear && parsed.year) searchYear = parsed.year;
       if (!searchSet && parsed.set) searchSet = parsed.set;
       if (parsed.player) searchPlayer = parsed.player;
       if (parsed.isAuto) searchIsAuto = parsed.isAuto;
+      if (parsed.insertSet) searchInsertSet = parsed.insertSet;
     }
 
     // Extract clean player name from known list
@@ -318,10 +351,11 @@ export class SportsCardProClient {
     }
 
     // BUILD SPECIFIC QUERY using all eBay data for exact match
-    // Format: "2019 Hoops Premium Stock LeBron James #87 Pulsar"
+    // Format: "2019 Optic Splash Stephen Curry #4 Holo"
     const queryParts = [];
     if (searchYear) queryParts.push(searchYear);
     if (searchSet) queryParts.push(searchSet);
+    if (searchInsertSet) queryParts.push(searchInsertSet);  // Include insert set (Splash, Rainmakers, etc.)
     if (cleanPlayer) queryParts.push(cleanPlayer);
     if (searchNumber) queryParts.push('#' + searchNumber);
     if (searchParallel) queryParts.push(searchParallel);
@@ -359,19 +393,22 @@ export class SportsCardProClient {
         const setMatch = searchSet.toLowerCase() === (scpData.set || '').toLowerCase();
         const parallelMatch = (searchParallel || '').toLowerCase() === (scpData.parallel || '').toLowerCase();
         const autoMatch = searchIsAuto === scpData.isAuto;
+        // Insert set must match if specified (e.g., Splash vs Rainmakers vs All-Stars)
+        const insertMatch = !searchInsertSet || (searchInsertSet.toLowerCase() === (scpData.insertSet || '').toLowerCase());
 
-        if (cardMatch && yearMatch && setMatch && parallelMatch && autoMatch) {
+        if (cardMatch && yearMatch && setMatch && parallelMatch && autoMatch && insertMatch) {
           product = p;
           console.log(`  SportsCardPro: EXACT MATCH found at result #${i + 1}`);
-          console.log(`    ${scpData.year} ${scpData.set} #${scpData.cardNumber} ${scpData.parallel || 'base'}`);
+          console.log(`    ${scpData.year} ${scpData.set} ${scpData.insertSet || ''} #${scpData.cardNumber} ${scpData.parallel || 'base'}`);
           break;
         } else {
-          // Log why it didn't match (only log if there are mismatches beyond parallel)
+          // Log why it didn't match
           const mismatches = [];
           if (!cardMatch) mismatches.push(`#${searchNumber}!=#${scpData.cardNumber}`);
           if (!yearMatch) mismatches.push(`yr${searchYear}!=yr${scpData.year}`);
           if (!setMatch) mismatches.push(`set`);
           if (!parallelMatch) mismatches.push(`par(${searchParallel || 'base'}!=${scpData.parallel || 'base'})`);
+          if (!insertMatch) mismatches.push(`insert(${searchInsertSet}!=${scpData.insertSet || 'none'})`);
           if (mismatches.length > 0) {
             console.log(`    #${i + 1}: ${mismatches.join(', ')}`);
           }
