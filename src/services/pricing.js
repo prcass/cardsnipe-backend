@@ -37,22 +37,23 @@ export class PriceService {
       try {
         result = await sportsCardPro.getMarketValue({ player, year, set, grade, cardNumber, parallel, imageUrl, sport, certNumber });
         if (result && result.marketValue) {
-          result.confidence = certNumber ? 'very-high' : 'high';  // Higher confidence when using PSA data
+          result.confidence = certNumber ? 'very-high' : 'high';
         }
       } catch (e) {
-        console.log('SportsCardPro lookup failed:', e.message);
+        result = { error: e.message };
       }
     } else {
-      console.log('SportsCardPro: No API token configured');
+      result = { error: 'no API token' };
     }
 
-    // No data found - return unknown
-    if (!result) {
+    // No data found or error - return with error info
+    if (!result || result.error || !result.marketValue) {
       return {
         marketValue: null,
         source: 'unknown',
         sourceUrl: null,
         confidence: 'none',
+        error: result?.error || 'no data',
         lastUpdated: new Date()
       };
     }

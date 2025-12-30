@@ -348,14 +348,11 @@ export class SportsCardProClient {
 
     const query = queryParts.join(' ').trim();
 
-    console.log(`  SportsCardPro: Searching "${query}"`);
-
     try {
       const products = await this.searchCards(query, searchSport);
 
       if (!products || products.length === 0) {
-        console.log('  SportsCardPro: No results found');
-        return null;
+        return { error: 'no SCP results' };
       }
 
       // With specific query, check first few results for exact match
@@ -420,83 +417,71 @@ export class SportsCardProClient {
 
         if (cardMatch && yearMatch && setMatch && parallelMatch && autoMatch && insertMatch) {
           product = p;
-          console.log(`  SportsCardPro: EXACT MATCH found at result #${i + 1}`);
-          console.log(`    ${scpData.year} ${scpData.set} ${scpData.insertSet || ''} #${scpData.cardNumber} ${scpData.parallel || 'base'}`);
+          product._matchedTo = `${scpData.year} ${scpData.set} ${scpData.insertSet || ''} #${scpData.cardNumber} ${scpData.parallel || 'base'}`.replace(/\s+/g, ' ').trim();
           break;
         } else {
-          // Log why it didn't match
-          const mismatches = [];
-          if (!cardMatch) mismatches.push(`#${searchNumber}!=#${scpData.cardNumber}`);
-          if (!yearMatch) mismatches.push(`yr${searchYear}!=yr${scpData.year}`);
-          if (!setMatch) mismatches.push(`set(${searchSet}!=${scpData.set})`);
-          if (!parallelMatch) mismatches.push(`par(${searchParNorm || 'base'}!=${scpParNorm || 'base'})`);
-          if (!insertMatch) mismatches.push(`insert(${searchInsertSet}!=${scpData.insertSet || 'none'})`);
-          if (mismatches.length > 0) {
-            console.log(`    #${i + 1}: ${mismatches.join(', ')}`);
+          // Track closest mismatch reason for logging
+          if (i === 0) {
+            const mismatches = [];
+            if (!parallelMatch) mismatches.push(`par:${searchParNorm || 'base'}!=${scpParNorm || 'base'}`);
+            if (!setMatch) mismatches.push(`set:${searchSet}!=${scpData.set}`);
+            if (!yearMatch) mismatches.push(`yr:${searchYear}!=${scpData.year}`);
+            if (!cardMatch) mismatches.push(`#${searchNumber}!=#${scpData.cardNumber}`);
+            if (!insertMatch) mismatches.push(`insert:${searchInsertSet}!=${scpData.insertSet || 'none'}`);
+            product = { _noMatch: true, _reason: mismatches.join(', ') };
           }
         }
       }
 
-      if (!product) {
-        console.log(`  SportsCardPro: No exact match in top ${maxToCheck} results`);
-        return null;
+      if (!product || product._noMatch) {
+        return { error: product?._reason || 'no match in results' };
       }
 
       // Get price based on grade (prices are in pennies)
       let priceInPennies = null;
-      let priceKey = 'loose-price'; // default to ungraded
+      let priceKey = 'loose-price';
 
-      console.log("  Grade for pricing: " + searchGrade);
       if (searchGrade) {
         const gradeUpper = searchGrade.toUpperCase();
-        // IMPORTANT: Check for specific grades (PSA 9, PSA 10) BEFORE generic terms like "GEM"
-        // This prevents "Gem Mint" without a number from defaulting to PSA 10
         if (gradeUpper.includes('PSA 9') || gradeUpper.includes('BGS 9') || gradeUpper.includes('BGS 9.5')) {
-          priceKey = 'graded-price'; // PSA 9 / BGS 9 / BGS 9.5
+          priceKey = 'graded-price';
           priceInPennies = product['graded-price'];
         } else if (gradeUpper.includes('PSA 10') || gradeUpper.includes('BGS 10') ||
                    (gradeUpper.includes('GEM') && gradeUpper.includes('10'))) {
-          priceKey = 'manual-only-price'; // Top grade (PSA 10/BGS 10)
+          priceKey = 'manual-only-price';
           priceInPennies = product['manual-only-price'] || product['bgs-10-price'];
         } else if (gradeUpper.includes('PSA 8') || gradeUpper.includes('BGS 8')) {
-          priceKey = 'new-price'; // PSA 8 / BGS 8.5
+          priceKey = 'new-price';
           priceInPennies = product['new-price'];
         }
       }
 
       // Fallback to loose price if graded price not available
-      if (!priceInPennies) console.log('  No graded price. PSA10=' + product['manual-only-price'] + ' PSA9=' + product['graded-price'] + ' loose=' + product['loose-price']);
       if (!priceInPennies) {
         priceInPennies = product['loose-price'];
         priceKey = 'loose-price';
       }
 
       if (!priceInPennies || priceInPennies <= 0) {
-        console.log('  SportsCardPro: No price data for this card');
-        return null;
+        return { error: 'no price data' };
       }
 
-      // Convert pennies to dollars
       const marketValue = priceInPennies / 100;
-
-      // Build source URL
       const sourceUrl = product['product-url'] ||
         `https://www.sportscardspro.com/game/${encodeURIComponent(product['console-name'] || 'sports-cards')}/${encodeURIComponent(product['product-name'] || query)}`;
-
-      console.log(`  SportsCardPro: ${product['product-name']} = $${marketValue} (${priceKey})`);
 
       return {
         marketValue,
         source: 'sportscardpro',
         sourceUrl,
+        matchedTo: product._matchedTo,
         productName: product['product-name'],
         productId: product['id'],
         priceType: priceKey,
         lastUpdated: new Date()
       };
     } catch (error) {
-      console.error('  SportsCardPro error:', error.message);
-      return null;
+      return { error: error.message };
     }
   }
 }

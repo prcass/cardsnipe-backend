@@ -37,7 +37,6 @@ export class COMCClient {
       // Build COMC search URL
       const searchTerm = query.replace(/\s+/g, '+');
       const searchUrl = `${this.baseUrl}/Cards,sb,i100,${searchTerm}`;
-      console.log(`  COMC: Fetching ${searchUrl}`);
 
       const response = await fetch(searchUrl, {
         headers: {
@@ -169,11 +168,9 @@ export class COMCClient {
         });
       }
 
-      console.log(`  COMC found ${listings.length} listings`);
       return listings;
 
     } catch (error) {
-      console.error(`COMC search error: ${error.message}`);
       return [];
     }
   }

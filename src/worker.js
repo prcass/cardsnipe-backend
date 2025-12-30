@@ -131,12 +131,22 @@ async function logScan(listing, sport, platform, outcome, rejectReason, marketDa
   }
 }
 
+// Format a short card description for logging
+function shortCard(listing) {
+  const year = listing.year || '';
+  const set = listing.setName || '';
+  const num = listing.cardNumber ? '#' + listing.cardNumber : '';
+  const par = listing.parallel || 'base';
+  const grade = listing.grade || '';
+  return `${year} ${set} ${num} ${par} ${grade}`.replace(/\s+/g, ' ').trim().substring(0, 50);
+}
+
 async function processListings(listings, sport, platform) {
   // Filter to only PSA 9 and 10
   const psa9or10 = listings.filter(isPSA9or10);
   const notPSA = listings.filter(l => !isPSA9or10(l));
 
-  // Log non-PSA 9/10 as rejected
+  // Silently log non-PSA 9/10 as rejected (don't spam console)
   for (const listing of notPSA) {
     await logScan(listing, sport, platform, 'rejected', 'not PSA 9 or 10', null, null);
   }
@@ -145,7 +155,7 @@ async function processListings(listings, sport, platform) {
   const inPriceRange = psa9or10.filter(l => l.currentPrice >= settings.minPrice && l.currentPrice <= settings.maxPrice);
   const outOfRange = psa9or10.filter(l => l.currentPrice < settings.minPrice || l.currentPrice > settings.maxPrice);
 
-  // Log out-of-range as rejected
+  // Silently log out-of-range as rejected
   for (const listing of outOfRange) {
     await logScan(listing, sport, platform, 'rejected', `price $${listing.currentPrice} outside range`, null, null);
   }
@@ -154,21 +164,22 @@ async function processListings(listings, sport, platform) {
   for (const listing of inPriceRange) {
     try {
       const marketData = await getMarketValue(listing, sport);
+      const card = shortCard(listing);
 
-      // Skip if market value unknown - don't guess
-      if (marketData === null) {
-        console.log('  Skipped (unknown mkt): ' + listing.title.substring(0, 40));
-        await logScan(listing, sport, platform, 'rejected', 'no market value found', null, null);
+      // Skip if market value unknown
+      if (!marketData || !marketData.value) {
+        const reason = marketData?.error || 'no match';
+        console.log(`  SKIP | $${listing.currentPrice} | ${card} | ${reason}`);
+        await logScan(listing, sport, platform, 'rejected', reason, null, null);
         continue;
       }
 
       const dealScore = calculateDealScore(listing.currentPrice, marketData.value);
-
-      // Log all matched cards with prices
-      console.log(`  MATCHED: $${listing.currentPrice} vs mkt $${marketData.value} = ${dealScore}% - ${listing.title.substring(0, 35)}`);
+      const matchedTo = marketData.matchedTo || marketData.productName || '';
 
       if (dealScore < settings.minDealScore) {
-        await logScan(listing, sport, platform, 'rejected', `deal score ${dealScore}% below min ${settings.minDealScore}%`, marketData, dealScore);
+        console.log(`  SKIP | $${listing.currentPrice} → $${marketData.value} (${dealScore}%) | ${card} | score < ${settings.minDealScore}%`);
+        await logScan(listing, sport, platform, 'rejected', `score ${dealScore}% < min ${settings.minDealScore}%`, marketData, dealScore);
         continue;
       }
 
@@ -195,13 +206,12 @@ async function processListings(listings, sport, platform) {
           is_active: true
         });
         saved++;
-        console.log(`  >>> DEAL SAVED: Score ${dealScore}% - ${listing.title.substring(0, 40)}`);
+        console.log(`  DEAL | $${listing.currentPrice} → $${marketData.value} (${dealScore}%) | ${card} → ${matchedTo}`);
         await logScan(listing, sport, platform, 'saved', null, marketData, dealScore);
       } else {
         await logScan(listing, sport, platform, 'matched', 'already exists', marketData, dealScore);
       }
     } catch (e) {
-      console.log('  Error saving listing: ' + e.message);
       await logScan(listing, sport, platform, 'rejected', 'error: ' + e.message, null, null);
     }
   }
@@ -215,61 +225,54 @@ async function scanPlayer(player, sport) {
   for (const query of queries) {
     // Try eBay if credentials are configured
     if (hasEbayKeys) {
-      console.log('    Searching eBay: ' + query);
       try {
         const listings = await ebay.searchListings({ query, sport, limit: 20, maxPrice: settings.maxPrice });
-        console.log('    eBay found ' + listings.length + ' listings');
-        total += await processListings(listings, sport, 'ebay');
+        if (listings.length > 0) {
+          total += await processListings(listings, sport, 'ebay');
+        }
         await new Promise(r => setTimeout(r, 2000));
       } catch (e) {
-        console.log('    eBay error: ' + e.message);
+        // Silent fail
       }
     }
 
     // Also try COMC
-    console.log('    Searching COMC: ' + query);
     try {
       const listings = await comc.searchListings({ query, sport, limit: 15 });
-      console.log('    COMC found ' + listings.length + ' listings');
-      total += await processListings(listings, sport, 'comc');
+      if (listings.length > 0) {
+        total += await processListings(listings, sport, 'comc');
+      }
       await new Promise(r => setTimeout(r, 3000));
     } catch (e) {
-      console.log('    COMC error: ' + e.message);
+      // Silent fail
     }
   }
   return total;
 }
 
 async function runWorker() {
-  console.log('CardSnipe Worker started');
-  console.log('Sources: ' + (hasEbayKeys ? 'eBay + ' : '') + 'COMC');
+  console.log('CardSnipe Worker | Sources: ' + (hasEbayKeys ? 'eBay + ' : '') + 'COMC');
 
   while (true) {
     try {
-      console.log('');
       await fetchSettings();
-      console.log('Starting scan at ' + new Date().toISOString());
+      console.log('\n=== SCAN ' + new Date().toLocaleTimeString() + ' ===');
       let totalNew = 0;
 
-      console.log('');
       console.log('Basketball:');
       for (const player of MONITORED_PLAYERS.basketball) {
-        console.log('  Scanning: ' + player);
+        console.log(' ' + player + ':');
         totalNew += await scanPlayer(player, 'basketball');
       }
 
-      console.log('');
       console.log('Baseball:');
       for (const player of MONITORED_PLAYERS.baseball) {
-        console.log('  Scanning: ' + player);
+        console.log(' ' + player + ':');
         totalNew += await scanPlayer(player, 'baseball');
       }
 
       const stats = await db('listings').where('is_active', true).count('* as count').first();
-      console.log('');
-      console.log('Scan complete. ' + totalNew + ' new. ' + stats.count + ' total active.');
-      console.log('Waiting 5 minutes...');
-      console.log('');
+      console.log('=== DONE: ' + totalNew + ' new deals | ' + stats.count + ' total ===\n');
       await new Promise(r => setTimeout(r, 5 * 60 * 1000));
 
     } catch (error) {
