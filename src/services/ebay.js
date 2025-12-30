@@ -158,10 +158,9 @@ export class EbayClient {
       // Extract structured data from eBay's localizedAspects (item specifics)
       const aspects = this.extractAspects(item.localizedAspects || []);
 
-      // Fall back to title parsing only if aspects not available
-      const parsedFromTitle = (!aspects.year || !aspects.cardNumber)
-        ? this.parseCardDetails(item.title)
-        : {};
+      // ALWAYS parse title for parallel detection (eBay aspects often have generic "Blue" instead of "Blue Velocity")
+      // Also parse for other fields if aspects are missing
+      const parsedFromTitle = this.parseCardDetails(item.title);
 
       return {
         ebayItemId: item.itemId,

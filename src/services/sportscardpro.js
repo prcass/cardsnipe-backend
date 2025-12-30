@@ -245,10 +245,11 @@ export class SportsCardProClient {
     // Otherwise "Blue Velocity" matches "Blue" and stops
     const parallels = [
       // Multi-word parallels (must check first)
+      'red/white/blue', 'red white blue', 'red, white, blue', 'red white and blue',  // RWB variants
       'blue velocity', 'red velocity', 'green velocity', 'orange velocity', 'purple velocity',
       'blue pulsar', 'green pulsar', 'red pulsar', 'orange pulsar', 'purple pulsar',
       'pink ice', 'red ice', 'blue ice', 'green ice', 'purple ice',
-      'fast break', 'instant impact', 'red white blue', 'black gold',
+      'fast break', 'instant impact', 'black gold',
       'blue shimmer', 'gold shimmer', 'red shimmer',
       'blue wave', 'red wave', 'gold wave',
       'hyper blue', 'hyper pink', 'hyper red',
@@ -263,7 +264,12 @@ export class SportsCardProClient {
     let parallel = null;
     for (const par of parallels) {
       if (titleUpper.includes(par.toUpperCase())) {
-        parallel = par;
+        // Normalize variants to standard form
+        if (par.includes('red') && par.includes('white') && par.includes('blue')) {
+          parallel = 'red white blue';
+        } else {
+          parallel = par;
+        }
         break;
       }
     }
