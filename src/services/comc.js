@@ -1,31 +1,13 @@
 /**
- * COMC (Check Out My Cards) Scraper with Puppeteer
+ * COMC (Check Out My Cards) Client
  *
- * Uses headless Chrome to scrape checkoutmycards.com for sports card listings.
+ * Scrapes comc.com for sports card listings using fetch + cheerio
+ * No Puppeteer required - works on Railway without Chrome
  */
 
-import puppeteer from 'puppeteer';
-
-let browser = null;
-
-async function getBrowser() {
-  if (!browser) {
-    browser = await puppeteer.launch({
-      executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
-      headless: 'new',
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-gpu',
-        '--no-first-run',
-        '--no-zygote',
-        '--single-process'
-      ]
-    });
-  }
-  return browser;
-}
+import fetch from 'node-fetch';
+import * as cheerio from 'cheerio';
+import { cardSets } from './card-sets.js';
 
 export class COMCClient {
   constructor() {
@@ -33,117 +15,166 @@ export class COMCClient {
   }
 
   /**
-   * Search for cards on COMC using Puppeteer
+   * Search for cards on COMC
+   * Note: COMC doesn't filter well by search query, so we fetch and filter client-side
    */
   async searchListings({ query, sport, limit = 30 }) {
-    let page = null;
     try {
-      const browser = await getBrowser();
-      page = await browser.newPage();
+      // Extract player name from query for filtering
+      const playerPatterns = [
+        /lebron james/i, /victor wembanyama/i, /luka doncic/i, /anthony edwards/i,
+        /stephen curry/i, /shohei ohtani/i, /mike trout/i, /julio rodriguez/i,
+        /gunnar henderson/i, /juan soto/i, /zion williamson/i, /ja morant/i
+      ];
+      let playerName = null;
+      for (const p of playerPatterns) {
+        if (p.test(query)) {
+          playerName = query.match(p)[0].toLowerCase();
+          break;
+        }
+      }
 
-      await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
-
-      // COMC uses comma-separated URL: /Cards,sb,i100,Search+Term
+      // Build COMC search URL
       const searchTerm = query.replace(/\s+/g, '+');
       const searchUrl = `${this.baseUrl}/Cards,sb,i100,${searchTerm}`;
       console.log(`  COMC: Fetching ${searchUrl}`);
 
-      await page.goto(searchUrl, { waitUntil: 'networkidle2', timeout: 30000 });
-
-      // Wait for page to fully render
-      await new Promise(r => setTimeout(r, 2000));
-
-      // Debug: Check what's on the page
-      const debug = await page.evaluate(() => {
-        const rows = document.querySelectorAll('table tr');
-        const anchors = document.querySelectorAll('a');
-        let sampleRow = rows.length > 2 ? rows[2].innerText?.substring(0, 150) : '';
-        let sampleAnchor = '';
-        for (const a of anchors) {
-          if (a.href && a.href.includes('comc.com') && a.textContent?.length > 10) {
-            sampleAnchor = a.textContent.substring(0, 80) + ' -> ' + a.href.substring(0, 50);
-            break;
-          }
-        }
-        return { rowCount: rows.length, anchorCount: anchors.length, sampleRow, sampleAnchor };
+      const response = await fetch(searchUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+          'Accept-Language': 'en-US,en;q=0.5'
+        },
+        timeout: 30000
       });
-      console.log(`  COMC Debug: ${debug.rowCount} rows, ${debug.anchorCount} anchors`);
-      if (debug.sampleRow) console.log(`  Sample row: ${debug.sampleRow}`);
-      if (debug.sampleAnchor) console.log(`  Sample link: ${debug.sampleAnchor}`);
 
-      // Extract listings from table rows
-      const listings = await page.evaluate((baseUrl, maxItems) => {
-        const results = [];
-        const rows = document.querySelectorAll('table tr');
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
 
-        rows.forEach((row, index) => {
-          if (results.length >= maxItems) return;
+      const html = await response.text();
+      const $ = cheerio.load(html);
+      const listings = [];
+
+      // COMC uses divs with class "cardinfo searchresult" for card listings
+      $('.cardinfo.searchresult').each((i, el) => {
+        if (listings.length >= limit) return;
+
+        try {
+          const $card = $(el);
+          const text = $card.text();
+
+          // Get the card link - usually in the title area
+          const $link = $card.find('a').first();
+          let title = $link.text().trim();
+          const listingUrl = $link.attr('href');
+
+          // If no title from link, try carddata
+          if (!title) {
+            title = $card.find('.carddata').text().trim();
+          }
+
+          // Clean up title - remove extra whitespace and newlines
+          title = title.replace(/\s+/g, ' ').trim();
+
+          // Skip if no title
+          if (!title || title.length < 10) return;
+
+          // Filter by player name if we have one
+          if (playerName && !title.toLowerCase().includes(playerName)) {
+            return;  // Skip cards that don't match player
+          }
+
+          // Extract price - look for dollar amounts
+          const priceMatches = text.match(/\$[\d,]+\.?\d*/g);
+          let price = 0;
+          if (priceMatches) {
+            for (const pm of priceMatches) {
+              const val = parseFloat(pm.replace(/[$,]/g, ''));
+              if (val >= 1 && val < 10000) {
+                price = val;
+                break;
+              }
+            }
+          }
+
+          // Get image
+          const $img = $card.find('img').first();
+          let imageUrl = $img.attr('src') || '';
+          if (imageUrl && !imageUrl.startsWith('http')) {
+            imageUrl = `https://img.comc.com${imageUrl}`;
+          }
+
+          if (price > 0) {
+            const parsed = this.parseCardDetails(title);
+            listings.push({
+              title: title.substring(0, 200),
+              currentPrice: price,
+              imageUrl,
+              listingUrl: listingUrl ? (listingUrl.startsWith('http') ? listingUrl : `${this.baseUrl}${listingUrl}`) : '',
+              platform: 'comc',
+              isAuction: false,
+              bidCount: 0,
+              ...parsed
+            });
+          }
+        } catch (e) {
+          // Skip malformed cards
+        }
+      });
+
+      // Fallback: try table rows if no cardinfo elements found
+      if (listings.length === 0) {
+        $('table tr').each((i, row) => {
+          if (listings.length >= limit) return;
 
           try {
-            const rowText = row.innerText || '';
-            // Must have a dollar sign to be a listing
+            const $row = $(row);
+            const rowText = $row.text();
             if (!rowText.includes('$')) return;
 
-            // Get any link
-            const link = row.querySelector('a');
-            const listingUrl = link?.href || '';
+            const $link = $row.find('a').first();
+            let title = $link.text().trim();
+            const listingUrl = $link.attr('href');
 
-            // Get title from link or first cell
-            let title = link?.textContent?.trim() || '';
-            if (!title) {
-              const firstCell = row.querySelector('td');
-              title = firstCell?.textContent?.trim() || '';
-            }
-
-            // Extract price
+            const priceMatches = rowText.match(/\$[\d,]+\.?\d*/g);
             let price = 0;
-            const priceMatches = rowText.match(/\$[\d,.]+/g);
             if (priceMatches) {
               for (const pm of priceMatches) {
                 const val = parseFloat(pm.replace(/[$,]/g, ''));
-                if (val >= 1 && val < 5000) {
+                if (val >= 1 && val < 10000) {
                   price = val;
                   break;
                 }
               }
             }
 
-            // Get image
-            const img = row.querySelector('img');
-            const imageUrl = img?.src || '';
+            const $img = $row.find('img').first();
+            const imageUrl = $img.attr('src') || '';
 
-            if (title.length > 5 && price > 0) {
-              results.push({
+            if (title.length > 10 && price > 0) {
+              const parsed = this.parseCardDetails(title);
+              listings.push({
                 title: title.substring(0, 200),
                 currentPrice: price,
-                imageUrl,
-                listingUrl,
+                imageUrl: imageUrl.startsWith('http') ? imageUrl : '',
+                listingUrl: listingUrl ? `${this.baseUrl}${listingUrl}` : '',
                 platform: 'comc',
                 isAuction: false,
-                bidCount: 0
+                bidCount: 0,
+                ...parsed
               });
             }
           } catch (e) {}
         });
+      }
 
-        return results;
-      }, this.baseUrl, limit);
-
-      console.log(`  COMC found ${listings.length} listings for "${query}"`);
-
-      // Parse card details for each listing
-      return listings.map(listing => ({
-        ...listing,
-        ...this.parseCardDetails(listing.title)
-      }));
+      console.log(`  COMC found ${listings.length} listings`);
+      return listings;
 
     } catch (error) {
       console.error(`COMC search error: ${error.message}`);
       return [];
-    } finally {
-      if (page) {
-        await page.close().catch(() => {});
-      }
     }
   }
 
@@ -153,10 +184,11 @@ export class COMCClient {
   parseCardDetails(title) {
     const result = {
       year: null,
-      playerName: null,
       setName: null,
+      cardNumber: null,
       grade: 'Raw',
       parallel: null,
+      insertSet: null,
       sport: null
     };
 
@@ -165,46 +197,70 @@ export class COMCClient {
     const titleUpper = title.toUpperCase();
 
     // Extract year
-    const yearMatch = title.match(/\b(19|20)\d{2}\b/);
-    if (yearMatch) result.year = parseInt(yearMatch[0]);
+    const yearMatch = title.match(/\b(19[89]\d|20[0-2]\d)\b/);
+    if (yearMatch) result.year = yearMatch[0];
+
+    // Extract card number
+    const numMatch = title.match(/#(\d{1,4})\b/);
+    if (numMatch) result.cardNumber = numMatch[1];
 
     // Extract grade
     const gradePatterns = [
-      /PSA\s*(\d+)/i,
-      /BGS\s*([\d.]+)/i,
-      /SGC\s*(\d+)/i,
-      /CGC\s*([\d.]+)/i
+      { pattern: /PSA\s*(\d+)/i, grader: 'PSA' },
+      { pattern: /BGS\s*([\d.]+)/i, grader: 'BGS' },
+      { pattern: /SGC\s*(\d+)/i, grader: 'SGC' },
+      { pattern: /CGC\s*([\d.]+)/i, grader: 'CGC' },
+      { pattern: /CSG\s*(\d+)/i, grader: 'CSG' }
     ];
 
-    for (const pattern of gradePatterns) {
+    for (const { pattern, grader } of gradePatterns) {
       const match = title.match(pattern);
       if (match) {
-        const grader = pattern.source.split('\\')[0].toUpperCase();
-        result.grader = grader;
         result.grade = `${grader} ${match[1]}`;
         break;
       }
     }
 
+    // Extract parallel using CardSets service
+    result.parallel = cardSets.detectParallel(title);
+
+    // Extract insert set using CardSets service
+    result.insertSet = cardSets.detectInsert(title);
+
+    // Detect set name
+    const setPatterns = [
+      { pattern: /PRIZM/i, name: 'Prizm' },
+      { pattern: /OPTIC/i, name: 'Optic' },
+      { pattern: /SELECT/i, name: 'Select' },
+      { pattern: /MOSAIC/i, name: 'Mosaic' },
+      { pattern: /HOOPS/i, name: 'Hoops' },
+      { pattern: /DONRUSS/i, name: 'Donruss' },
+      { pattern: /TOPPS\s*CHROME/i, name: 'Topps Chrome' },
+      { pattern: /BOWMAN\s*CHROME/i, name: 'Bowman Chrome' },
+      { pattern: /TOPPS/i, name: 'Topps' },
+      { pattern: /BOWMAN/i, name: 'Bowman' }
+    ];
+
+    for (const { pattern, name } of setPatterns) {
+      if (pattern.test(title)) {
+        result.setName = name;
+        break;
+      }
+    }
+
     // Detect sport
-    const basketballKeywords = ['PRIZM', 'OPTIC', 'SELECT', 'MOSAIC', 'HOOPS', 'NBA', 'BASKETBALL'];
-    const baseballKeywords = ['TOPPS', 'BOWMAN', 'CHROME', 'MLB', 'BASEBALL'];
+    const basketballKeywords = ['PRIZM', 'OPTIC', 'SELECT', 'MOSAIC', 'HOOPS', 'NBA', 'BASKETBALL', 'PANINI'];
+    const baseballKeywords = ['TOPPS', 'BOWMAN', 'MLB', 'BASEBALL'];
+    const footballKeywords = ['FOOTBALL', 'NFL'];
 
     if (basketballKeywords.some(kw => titleUpper.includes(kw))) {
       result.sport = 'basketball';
     } else if (baseballKeywords.some(kw => titleUpper.includes(kw))) {
       result.sport = 'baseball';
+    } else if (footballKeywords.some(kw => titleUpper.includes(kw))) {
+      result.sport = 'football';
     }
 
     return result;
   }
 }
-
-// Cleanup browser on process exit
-process.on('exit', () => {
-  if (browser) browser.close().catch(() => {});
-});
-process.on('SIGINT', () => {
-  if (browser) browser.close().catch(() => {});
-  process.exit();
-});
