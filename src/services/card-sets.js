@@ -200,10 +200,17 @@ class CardSetsService {
    */
   normalizeInsert(insert) {
     if (!insert) return null;
-    return insert.toLowerCase()
+    let normalized = insert.toLowerCase()
       .replace(/-/g, ' ')
       .replace(/,/g, '')
       .trim();
+
+    // Fix common typos
+    if (normalized === "that's save") {
+      normalized = "that's savage";
+    }
+
+    return normalized;
   }
 
   /**
