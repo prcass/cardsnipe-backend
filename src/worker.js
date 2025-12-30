@@ -174,8 +174,7 @@ async function incrementScanCount(count) {
 }
 
 async function processListings(listings, sport, platform) {
-  // Increment scan count for all listings checked
-  await incrementScanCount(listings.length);
+  // Note: Scan count is now incremented in the eBay/COMC clients before filtering
 
   // Filter to only PSA 9 and 10
   const psa9or10 = listings.filter(isPSA9or10);
