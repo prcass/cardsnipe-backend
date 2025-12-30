@@ -412,8 +412,7 @@ export class SportsCardProClient {
       if (parsed.isAuto) searchIsAuto = parsed.isAuto;
     }
 
-    // Build SIMPLE query - just player name + optional set
-    // Extract player from known list to avoid sending full eBay titles
+    // Extract clean player name from known list
     const players = ['LeBron James', 'Victor Wembanyama', 'Luka Doncic', 'Anthony Edwards',
       'Stephen Curry', 'Shohei Ohtani', 'Mike Trout', 'Julio Rodriguez', 'Gunnar Henderson', 'Juan Soto'];
     let cleanPlayer = searchPlayer;
@@ -424,25 +423,32 @@ export class SportsCardProClient {
       }
     }
 
-    // SIMPLE query - just player name to avoid OR keyword matching issues
-    // The API matches ANY keyword, so "LeBron James Prizm" matches cards with just "James"
-    // We'll filter by set/year/number in the results instead
-    let query = cleanPlayer || '';
-    query = query.trim();
-
-    if (!query || query.length < 5) {
-      console.log('  SportsCardPro: Query too short, skipping');
-      return null;
-    }
-
-    // REQUIRED: Card number must be provided - no fallback parsing
+    // REQUIRED: Must have card number, year, and set to search
     if (!searchNumber) {
-      console.log('  SportsCardPro: Card # not found, skipping (no fallback)');
+      console.log('  SportsCardPro: Card # not found, skipping');
+      return null;
+    }
+    if (!searchYear) {
+      console.log('  SportsCardPro: Year not found, skipping');
+      return null;
+    }
+    if (!searchSet) {
+      console.log('  SportsCardPro: Set not found, skipping');
       return null;
     }
 
-    // Log what we're searching for - all criteria must match
-    console.log(`  SportsCardPro: Searching "${query}" #${searchNumber} ${searchYear || '?'} ${searchSet || '?'} ${searchParallel || 'base'}`);
+    // BUILD SPECIFIC QUERY using all eBay data for exact match
+    // Format: "2019 Hoops Premium Stock LeBron James #87 Pulsar"
+    const queryParts = [];
+    if (searchYear) queryParts.push(searchYear);
+    if (searchSet) queryParts.push(searchSet);
+    if (cleanPlayer) queryParts.push(cleanPlayer);
+    if (searchNumber) queryParts.push('#' + searchNumber);
+    if (searchParallel) queryParts.push(searchParallel);
+
+    const query = queryParts.join(' ').trim();
+
+    console.log(`  SportsCardPro: Searching "${query}"`);
 
     try {
       const products = await this.searchCards(query, searchSport);
@@ -452,97 +458,46 @@ export class SportsCardProClient {
         return null;
       }
 
-      // Find best matching product - check if it actually matches our search
+      // With specific query, check first few results for exact match
       let product = null;
-      // Use cleanPlayer (e.g., "LeBron James") for name matching, not the full title
-      const playerLower = (cleanPlayer || searchPlayer || '').toLowerCase().trim();
-      const playerParts = playerLower.split(/\s+/);
-      const firstName = playerParts[0] || '';
-      const lastName = playerParts.length > 1 ? playerParts[playerParts.length - 1] : '';
+      const maxToCheck = Math.min(products.length, 5); // Only check top 5 results
 
-      let cardCount = 0;
-      let nameMatchCount = 0;
-      for (const p of products) {
+      for (let i = 0; i < maxToCheck; i++) {
+        const p = products[i];
         const productName = (p['product-name'] || '');
         const consoleName = (p['console-name'] || '');
-        const productNameLower = productName.toLowerCase();
-        const consoleNameLower = consoleName.toLowerCase();
 
-        // MUST be actual trading cards - check for known card brands or card categories
-        const brands = ['panini', 'topps', 'fleer', 'upper deck', 'bowman', 'donruss', 'prizm', 'select', 'mosaic', 'optic', 'chrome',
-          'basketball cards', 'baseball cards', 'football cards', 'hockey cards', 'soccer cards'];
-        // Must NOT be Funko POP
-        if (consoleNameLower.includes('funko') || productNameLower.includes('funko')) {
-          continue;
-        }
-        const isTradingCard = brands.some(b => consoleNameLower.includes(b) || productNameLower.includes(b));
-        if (!isTradingCard) {
-          continue;
-        }
-        cardCount++;
+        // Skip non-cards
+        if (consoleName.toLowerCase().includes('funko')) continue;
 
-        // Require BOTH first and last name to be in the product name
-        const hasFirstName = firstName && productNameLower.includes(firstName);
-        const hasLastName = lastName && productNameLower.includes(lastName);
-
-        if (!hasFirstName || !hasLastName) {
-          continue; // Skip if doesn't have both names
-        }
-        nameMatchCount++;
-
-        // PARSE SportsCardPro product to get structured data
+        // Parse SportsCardPro product
         const scpData = this.parseSCPProduct(consoleName, productName);
 
-        // STRICT MATCHING - Compare structured data directly (no substring matching)
+        // Check for EXACT match on all criteria
+        const cardMatch = searchNumber === scpData.cardNumber;
+        const yearMatch = searchYear === scpData.year;
+        const setMatch = searchSet.toLowerCase() === (scpData.set || '').toLowerCase();
+        const parallelMatch = (searchParallel || '').toLowerCase() === (scpData.parallel || '').toLowerCase();
+        const autoMatch = searchIsAuto === scpData.isAuto;
 
-        // 1. Card number must match EXACTLY
-        if (searchNumber !== scpData.cardNumber) {
-          console.log(`    REJECT: Card # mismatch (${searchNumber} vs ${scpData.cardNumber}) - ${productName.substring(0, 40)}`);
-          continue;
+        if (cardMatch && yearMatch && setMatch && parallelMatch && autoMatch) {
+          product = p;
+          console.log(`  SportsCardPro: EXACT MATCH found at result #${i + 1}`);
+          console.log(`    ${scpData.year} ${scpData.set} #${scpData.cardNumber} ${scpData.parallel || 'base'}`);
+          break;
+        } else {
+          // Log why it didn't match
+          const mismatches = [];
+          if (!cardMatch) mismatches.push(`card#(${searchNumber}!=${scpData.cardNumber})`);
+          if (!yearMatch) mismatches.push(`year(${searchYear}!=${scpData.year})`);
+          if (!setMatch) mismatches.push(`set(${searchSet}!=${scpData.set})`);
+          if (!parallelMatch) mismatches.push(`parallel(${searchParallel || 'base'}!=${scpData.parallel || 'base'})`);
+          console.log(`    Result #${i + 1}: ${mismatches.join(', ')}`);
         }
-
-        // 2. Year must match EXACTLY
-        if (!searchYear || searchYear !== scpData.year) {
-          console.log(`    REJECT: Year mismatch (${searchYear} vs ${scpData.year}) - ${productName.substring(0, 40)}`);
-          continue;
-        }
-
-        // 3. Set must match (normalize both to lowercase for comparison)
-        if (!searchSet) {
-          console.log(`    REJECT: No set info - ${productName.substring(0, 40)}`);
-          continue;
-        }
-        const searchSetNorm = searchSet.toLowerCase().replace(/\s+/g, ' ').trim();
-        const scpSetNorm = (scpData.set || '').toLowerCase().replace(/\s+/g, ' ').trim();
-        if (searchSetNorm !== scpSetNorm) {
-          console.log(`    REJECT: Set mismatch (${searchSetNorm} vs ${scpSetNorm}) - ${productName.substring(0, 40)}`);
-          continue;
-        }
-
-        // 4. Parallel must match (null/empty = base card)
-        const searchParallelNorm = (searchParallel || '').toLowerCase().trim();
-        const scpParallelNorm = (scpData.parallel || '').toLowerCase().trim();
-        if (searchParallelNorm !== scpParallelNorm) {
-          console.log(`    REJECT: Parallel mismatch (${searchParallelNorm || 'base'} vs ${scpParallelNorm || 'base'}) - ${productName.substring(0, 40)}`);
-          continue;
-        }
-
-        // 5. Autograph status must match
-        if (searchIsAuto !== scpData.isAuto) {
-          console.log(`    REJECT: Auto mismatch - ${productName.substring(0, 40)}`);
-          continue;
-        }
-
-        // ALL CRITERIA MATCHED!
-        product = p;
-        console.log(`  SportsCardPro: EXACT MATCH`);
-        console.log(`    eBay:  #${searchNumber}, ${searchYear}, ${searchSet}, ${searchParallel || 'base'}, auto=${searchIsAuto}`);
-        console.log(`    SCP:   #${scpData.cardNumber}, ${scpData.year}, ${scpData.set}, ${scpData.parallel || 'base'}, auto=${scpData.isAuto}`);
-        break;
       }
 
       if (!product) {
-        console.log(`  SportsCardPro: No match in ${products.length} results (${cardCount} cards, ${nameMatchCount} with name)`);
+        console.log(`  SportsCardPro: No exact match in top ${maxToCheck} results`);
         return null;
       }
 
