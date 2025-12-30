@@ -135,14 +135,13 @@ export class SportsCardProClient {
       throw new Error('SPORTSCARDPRO_TOKEN not configured');
     }
 
-    // Build URL with optional category filter
-    let url = `${this.baseUrl}/api/products?t=${this.token}&q=${encodeURIComponent(query)}`;
-
-    // Add category filter if sport is specified
-    const category = this.getCategoryForSport(sport);
-    if (category) {
-      url += `&console=${encodeURIComponent(category)}`;
+    // Add sport to query to help filter results (API has no category parameter)
+    let searchQuery = query;
+    if (sport && !query.toLowerCase().includes(sport)) {
+      searchQuery = `${sport} ${query}`;
     }
+
+    const url = `${this.baseUrl}/api/products?t=${this.token}&q=${encodeURIComponent(searchQuery)}`;
 
     try {
       const response = await fetch(url, {
@@ -347,8 +346,8 @@ export class SportsCardProClient {
     if (searchParallel || searchIsAuto) {
       console.log(`  SportsCardPro: Detected parallel=${searchParallel || 'none'}, auto=${searchIsAuto}`);
     }
-    const category = this.getCategoryForSport(searchSport);
-    console.log(`  SportsCardPro: Searching "${query}" in ${category || 'all categories'}`);
+    // Log what we're searching (sport will be prepended in searchCards)
+    console.log(`  SportsCardPro: Searching "${searchSport ? searchSport + ' ' : ''}${query}"`);
 
     try {
       const products = await this.searchCards(query, searchSport);
@@ -376,15 +375,27 @@ export class SportsCardProClient {
         }
       }
 
+      let cardCount = 0;
+      let nameMatchCount = 0;
       for (const p of products) {
         const productName = (p['product-name'] || '').toLowerCase();
         const consoleName = (p['console-name'] || '').toLowerCase();
 
-        // MUST be actual trading cards - check for known card brands
-        const brands = ['panini', 'topps', 'fleer', 'upper deck', 'bowman', 'donruss', 'prizm', 'select', 'mosaic', 'optic', 'chrome'];
+        // MUST be actual trading cards - check for known card brands or card categories
+        const brands = ['panini', 'topps', 'fleer', 'upper deck', 'bowman', 'donruss', 'prizm', 'select', 'mosaic', 'optic', 'chrome',
+          'basketball cards', 'baseball cards', 'football cards', 'hockey cards', 'soccer cards'];
+        // Must NOT be Funko POP
+        if (consoleName.includes('funko') || productName.includes('funko')) {
+          continue;
+        }
         const isTradingCard = brands.some(b => consoleName.includes(b) || productName.includes(b));
         if (!isTradingCard) {
           continue;
+        }
+        cardCount++;
+        // Log first few actual cards found
+        if (cardCount <= 3) {
+          console.log(`    Card ${cardCount}: "${p['console-name']}" - "${p['product-name']}"`);
         }
 
         // Require BOTH first and last name to be in the product name
@@ -394,9 +405,10 @@ export class SportsCardProClient {
         if (!hasFirstName || !hasLastName) {
           continue; // Skip if doesn't have both names
         }
+        nameMatchCount++;
 
         // Debug: this product passed brand and name filters
-        console.log(`    Checking: "${p['product-name']}" (brand ✓, name ✓)`);
+        console.log(`    Match: "${p['product-name']}" (brand ✓, name ✓)`);
 
         // If we have a specific set/brand, require it to match
         const searchSetLower = (searchSet || '').toLowerCase();
@@ -444,7 +456,7 @@ export class SportsCardProClient {
       }
 
       if (!product) {
-        console.log('  SportsCardPro: No matching product found in ' + products.length + ' results');
+        console.log(`  SportsCardPro: No match in ${products.length} results (${cardCount} cards, ${nameMatchCount} with name)`);
         return null;
       }
 
