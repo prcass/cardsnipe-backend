@@ -178,7 +178,10 @@ app.post('/api/watchlist', async (req, res) => {
 app.delete('/api/clear-data', async (req, res) => {
   try {
     const deleted = await db('listings').del();
-    console.log('Cleared ' + deleted + ' listings from database');
+    // Reset scan counter
+    scanCounter.total = 0;
+    scanCounter.lastReset = new Date();
+    console.log('Cleared ' + deleted + ' listings from database, reset scan counter');
     res.json({ success: true, deleted });
   } catch (error) {
     console.error('Error clearing data:', error);
@@ -225,6 +228,12 @@ let appSettings = {
   cardYear: null        // Filter to specific card year (null = all years)
 };
 
+// Scan counter (tracks cards scanned since last reset)
+let scanCounter = {
+  total: 0,
+  lastReset: new Date()
+};
+
 // Get current settings
 app.get('/api/settings', (req, res) => {
   res.json({ success: true, data: appSettings });
@@ -248,6 +257,29 @@ app.post('/api/settings', (req, res) => {
 export function getSettings() {
   return appSettings;
 }
+
+// ============================================
+// SCAN COUNTER API
+// ============================================
+
+// Get scan count
+app.get('/api/scan-count', (req, res) => {
+  res.json({ success: true, data: scanCounter });
+});
+
+// Increment scan count (called by worker)
+app.post('/api/scan-count/increment', (req, res) => {
+  const { count = 1 } = req.body;
+  scanCounter.total += count;
+  res.json({ success: true, data: scanCounter });
+});
+
+// Reset scan count
+app.post('/api/scan-count/reset', (req, res) => {
+  scanCounter.total = 0;
+  scanCounter.lastReset = new Date();
+  res.json({ success: true, data: scanCounter });
+});
 
 // ============================================
 // SCAN LOG & REPORTING API

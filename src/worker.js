@@ -159,7 +159,24 @@ function shortCard(listing) {
   return `${year} ${set} ${num} ${par} ${grade}`.replace(/\s+/g, ' ').trim().substring(0, 50);
 }
 
+// Increment scan counter on server
+async function incrementScanCount(count) {
+  try {
+    const serverUrl = process.env.SERVER_URL || 'http://localhost:3001';
+    await fetch(serverUrl + '/api/scan-count/increment', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ count })
+    });
+  } catch (e) {
+    // Silent fail
+  }
+}
+
 async function processListings(listings, sport, platform) {
+  // Increment scan count for all listings checked
+  await incrementScanCount(listings.length);
+
   // Filter to only PSA 9 and 10
   const psa9or10 = listings.filter(isPSA9or10);
   const notPSA = listings.filter(l => !isPSA9or10(l));
