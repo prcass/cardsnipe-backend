@@ -473,9 +473,9 @@ export class SportsCardProClient {
         // Parse SportsCardPro product
         const scpData = this.parseSCPProduct(consoleName, productName);
 
-        // Check for EXACT match on all criteria
-        const cardMatch = searchNumber === scpData.cardNumber;
-        const yearMatch = searchYear === scpData.year;
+        // Check for EXACT match on all criteria (normalize types)
+        const cardMatch = String(searchNumber) === String(scpData.cardNumber);
+        const yearMatch = String(searchYear) === String(scpData.year);
         const setMatch = searchSet.toLowerCase() === (scpData.set || '').toLowerCase();
         const parallelMatch = (searchParallel || '').toLowerCase() === (scpData.parallel || '').toLowerCase();
         const autoMatch = searchIsAuto === scpData.isAuto;
@@ -486,13 +486,15 @@ export class SportsCardProClient {
           console.log(`    ${scpData.year} ${scpData.set} #${scpData.cardNumber} ${scpData.parallel || 'base'}`);
           break;
         } else {
-          // Log why it didn't match
+          // Log why it didn't match (only log if there are mismatches beyond parallel)
           const mismatches = [];
-          if (!cardMatch) mismatches.push(`card#(${searchNumber}!=${scpData.cardNumber})`);
-          if (!yearMatch) mismatches.push(`year(${searchYear}!=${scpData.year})`);
-          if (!setMatch) mismatches.push(`set(${searchSet}!=${scpData.set})`);
-          if (!parallelMatch) mismatches.push(`parallel(${searchParallel || 'base'}!=${scpData.parallel || 'base'})`);
-          console.log(`    Result #${i + 1}: ${mismatches.join(', ')}`);
+          if (!cardMatch) mismatches.push(`#${searchNumber}!=#${scpData.cardNumber}`);
+          if (!yearMatch) mismatches.push(`yr${searchYear}!=yr${scpData.year}`);
+          if (!setMatch) mismatches.push(`set`);
+          if (!parallelMatch) mismatches.push(`par(${searchParallel || 'base'}!=${scpData.parallel || 'base'})`);
+          if (mismatches.length > 0) {
+            console.log(`    #${i + 1}: ${mismatches.join(', ')}`);
+          }
         }
       }
 
