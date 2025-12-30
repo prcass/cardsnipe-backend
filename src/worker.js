@@ -22,7 +22,8 @@ const hasEbayKeys = process.env.EBAY_CLIENT_ID && process.env.EBAY_CLIENT_SECRET
 let settings = {
   minPrice: 0,
   maxPrice: 500,
-  minDealScore: 10
+  minDealScore: 10,
+  cardYear: null
 };
 
 // Fetch settings from server API
@@ -34,7 +35,7 @@ async function fetchSettings() {
       const data = await response.json();
       if (data.success) {
         settings = data.data;
-        console.log('Settings loaded: minPrice=' + settings.minPrice + ', maxPrice=' + settings.maxPrice);
+        console.log('Settings loaded: minPrice=' + settings.minPrice + ', maxPrice=' + settings.maxPrice + ', year=' + (settings.cardYear || 'all'));
       }
     }
   } catch (e) {
@@ -65,11 +66,12 @@ async function getMonitoredPlayers() {
 
 function buildQueries(player) {
   // Only search for PSA 9 and PSA 10 graded cards
+  const year = settings.cardYear ? settings.cardYear + ' ' : '';
   return [
-    player + ' PSA 10',
-    player + ' PSA 9',
-    player + ' Prizm PSA 10',
-    player + ' Prizm PSA 9'
+    year + player + ' PSA 10',
+    year + player + ' PSA 9',
+    year + player + ' Prizm PSA 10',
+    year + player + ' Prizm PSA 9'
   ];
 }
 

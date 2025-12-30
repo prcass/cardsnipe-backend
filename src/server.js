@@ -10,6 +10,13 @@ import { EbayClient } from './services/ebay.js';
 import { PriceService } from './services/pricing.js';
 import { db } from './db/index.js';
 import crypto from 'crypto';
+import { readFileSync } from 'fs';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const teamRosters = JSON.parse(readFileSync(join(__dirname, 'data/team-rosters.json'), 'utf-8'));
 
 const app = express();
 const httpServer = createServer(app);
@@ -214,7 +221,8 @@ let appSettings = {
   minPrice: 0,          // Minimum price to search for
   maxPrice: 500,        // Maximum price to search for
   minDealScore: 10,     // Minimum deal score to save
-  scanInterval: 5       // Minutes between scans
+  scanInterval: 5,      // Minutes between scans
+  cardYear: null        // Filter to specific card year (null = all years)
 };
 
 // Get current settings
@@ -224,12 +232,13 @@ app.get('/api/settings', (req, res) => {
 
 // Update settings
 app.post('/api/settings', (req, res) => {
-  const { minPrice, maxPrice, minDealScore, scanInterval } = req.body;
+  const { minPrice, maxPrice, minDealScore, scanInterval, cardYear } = req.body;
 
   if (minPrice !== undefined) appSettings.minPrice = Number(minPrice);
   if (maxPrice !== undefined) appSettings.maxPrice = Number(maxPrice);
   if (minDealScore !== undefined) appSettings.minDealScore = Number(minDealScore);
   if (scanInterval !== undefined) appSettings.scanInterval = Number(scanInterval);
+  if (cardYear !== undefined) appSettings.cardYear = cardYear ? Number(cardYear) : null;
 
   console.log('Settings updated:', appSettings);
   res.json({ success: true, data: appSettings });
@@ -421,6 +430,78 @@ app.delete('/api/players/:id', async (req, res) => {
     await db('monitored_players').where({ id }).del();
     console.log(`Deleted player: ${player.name}`);
     res.json({ success: true, message: `Deleted ${player.name}` });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============================================
+// TEAM ROSTER API
+// ============================================
+
+// Get all teams grouped by sport
+app.get('/api/teams', (req, res) => {
+  const teams = {
+    basketball: Object.keys(teamRosters.nba).sort(),
+    baseball: Object.keys(teamRosters.mlb).sort(),
+    football: Object.keys(teamRosters.nfl).sort()
+  };
+  res.json({ success: true, data: teams });
+});
+
+// Get players for a specific team
+app.get('/api/teams/:sport/:team', (req, res) => {
+  const { sport, team } = req.params;
+  const sportKey = sport === 'basketball' ? 'nba' : sport === 'baseball' ? 'mlb' : 'nfl';
+  const players = teamRosters[sportKey]?.[team];
+
+  if (!players) {
+    return res.status(404).json({ success: false, error: 'Team not found' });
+  }
+
+  res.json({ success: true, data: players });
+});
+
+// Import all players from a team
+app.post('/api/players/import-team', async (req, res) => {
+  try {
+    const { sport, team } = req.body;
+    if (!sport || !team) {
+      return res.status(400).json({ success: false, error: 'Sport and team are required' });
+    }
+
+    const sportKey = sport === 'basketball' ? 'nba' : sport === 'baseball' ? 'mlb' : 'nfl';
+    const players = teamRosters[sportKey]?.[team];
+
+    if (!players) {
+      return res.status(404).json({ success: false, error: 'Team not found' });
+    }
+
+    let added = 0;
+    let skipped = 0;
+
+    for (const name of players) {
+      // Check if player already exists
+      const existing = await db('monitored_players')
+        .where({ name, sport })
+        .first();
+
+      if (existing) {
+        skipped++;
+        continue;
+      }
+
+      await db('monitored_players').insert({ name, sport, active: true });
+      added++;
+    }
+
+    console.log(`Imported ${team}: ${added} added, ${skipped} already existed`);
+    res.json({
+      success: true,
+      message: `Added ${added} players from ${team}`,
+      added,
+      skipped
+    });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
