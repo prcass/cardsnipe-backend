@@ -318,8 +318,10 @@ export class SportsCardProClient {
         const productName = (p['product-name'] || '').toLowerCase();
         const consoleName = (p['console-name'] || '').toLowerCase();
 
-        // MUST be actual sports cards, not Funko POPs
-        if (!consoleName.includes('basketball cards') && !consoleName.includes('baseball cards') && !consoleName.includes('football cards')) {
+        // MUST be actual trading cards - check for known card brands
+        const brands = ['panini', 'topps', 'fleer', 'upper deck', 'bowman', 'donruss', 'prizm', 'select', 'mosaic', 'optic', 'chrome'];
+        const isTradingCard = brands.some(b => consoleName.includes(b) || productName.includes(b));
+        if (!isTradingCard) {
           continue;
         }
 
