@@ -391,7 +391,23 @@ export class SportsCardProClient {
         const cardMatch = String(searchNumber) === String(scpData.cardNumber);
         const yearMatch = String(searchYear) === String(scpData.year);
         const setMatch = searchSet.toLowerCase() === (scpData.set || '').toLowerCase();
-        const parallelMatch = (searchParallel || '').toLowerCase() === (scpData.parallel || '').toLowerCase();
+
+        // Parallel matching: normalize by removing common suffixes like " prizm"
+        // e.g., "green" should match "green prizm", "silver" should match "silver prizm"
+        const normalizeParallel = (p) => {
+          if (!p) return '';
+          return p.toLowerCase()
+            .replace(/ prizm$/, '')
+            .replace(/ refractor$/, '')
+            .replace(/ holo$/, '')
+            .trim();
+        };
+        const searchParNorm = normalizeParallel(searchParallel);
+        const scpParNorm = normalizeParallel(scpData.parallel);
+        const parallelMatch = searchParNorm === scpParNorm ||
+                              scpParNorm.includes(searchParNorm) ||
+                              searchParNorm.includes(scpParNorm);
+
         const autoMatch = searchIsAuto === scpData.isAuto;
         // Insert set must match if specified (e.g., Splash vs Rainmakers vs All-Stars)
         const insertMatch = !searchInsertSet || (searchInsertSet.toLowerCase() === (scpData.insertSet || '').toLowerCase());
@@ -406,8 +422,8 @@ export class SportsCardProClient {
           const mismatches = [];
           if (!cardMatch) mismatches.push(`#${searchNumber}!=#${scpData.cardNumber}`);
           if (!yearMatch) mismatches.push(`yr${searchYear}!=yr${scpData.year}`);
-          if (!setMatch) mismatches.push(`set`);
-          if (!parallelMatch) mismatches.push(`par(${searchParallel || 'base'}!=${scpData.parallel || 'base'})`);
+          if (!setMatch) mismatches.push(`set(${searchSet}!=${scpData.set})`);
+          if (!parallelMatch) mismatches.push(`par(${searchParNorm || 'base'}!=${scpParNorm || 'base'})`);
           if (!insertMatch) mismatches.push(`insert(${searchInsertSet}!=${scpData.insertSet || 'none'})`);
           if (mismatches.length > 0) {
             console.log(`    #${i + 1}: ${mismatches.join(', ')}`);
