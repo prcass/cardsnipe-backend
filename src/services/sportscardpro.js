@@ -268,22 +268,28 @@ export class SportsCardProClient {
         }
       }
 
-      // If still no cert found, parse title manually
-      if (!searchYear || !searchPlayer) {
-        const parsed = this.parseTitle(player);
-        searchYear = searchYear || parsed.year || year;
-        searchSet = searchSet || parsed.set || set;
-        searchNumber = searchNumber || parsed.cardNumber || cardNumber;
-        searchPlayer = searchPlayer || parsed.player || player;
+      // Always parse title to extract clean details
+      const parsed = this.parseTitle(player);
+      if (parsed.year) searchYear = parsed.year;
+      if (parsed.set) searchSet = parsed.set;
+      if (parsed.player) searchPlayer = parsed.player;
+    }
+
+    // Build SIMPLE query - just player name + optional set
+    // Extract player from known list to avoid sending full eBay titles
+    const players = ['LeBron James', 'Victor Wembanyama', 'Luka Doncic', 'Anthony Edwards',
+      'Stephen Curry', 'Shohei Ohtani', 'Mike Trout', 'Julio Rodriguez', 'Gunnar Henderson', 'Juan Soto'];
+    let cleanPlayer = searchPlayer;
+    for (const p of players) {
+      if (player && player.toLowerCase().includes(p.toLowerCase())) {
+        cleanPlayer = p;
+        break;
       }
     }
 
-    // Build search query - simpler is better for API matching
-    let query = '';
-    if (searchYear) query += searchYear + ' ';
-    if (searchPlayer) query += searchPlayer + ' ';
-    if (searchSet) query += searchSet + ' ';
-    if (searchNumber) query += '#' + searchNumber;
+    let query = cleanPlayer || '';
+    if (searchSet) query += ' ' + searchSet;
+    if (searchYear) query += ' ' + searchYear;
     query = query.trim();
 
     if (!query || query.length < 5) {
