@@ -161,24 +161,32 @@ function shortCard(listing) {
 
 // Increment scan counter on server
 async function incrementScanCount(count) {
+  if (count <= 0) return;
   try {
     const serverUrl = process.env.SERVER_URL || 'http://localhost:3001';
-    await fetch(serverUrl + '/api/scan-count/increment', {
+    console.log(`  [Scan count +${count}]`);
+    const resp = await fetch(serverUrl + '/api/scan-count/increment', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ count })
     });
+    if (!resp.ok) {
+      console.log(`  [Scan count error: ${resp.status}]`);
+    }
   } catch (e) {
-    // Silent fail
+    console.log(`  [Scan count failed: ${e.message}]`);
   }
 }
 
 async function processListings(listings, sport, platform) {
   // Listings are already filtered to PSA 9/10 by the eBay client
+  console.log(`  [${platform}] Received ${listings.length} PSA 9/10 cards`);
 
   // Filter by price range
   const inPriceRange = listings.filter(l => l.currentPrice >= settings.minPrice && l.currentPrice <= settings.maxPrice);
   const outOfRange = listings.filter(l => l.currentPrice < settings.minPrice || l.currentPrice > settings.maxPrice);
+
+  console.log(`  [${platform}] ${inPriceRange.length} in price range ($${settings.minPrice}-$${settings.maxPrice}), ${outOfRange.length} outside`);
 
   // Increment scan count for qualified cards (PSA 9/10 + in price range)
   // These are the cards we're actually examining for deals
