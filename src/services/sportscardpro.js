@@ -306,6 +306,7 @@ export class SportsCardProClient {
       }
     }
 
+    // Add "cards" to query to prioritize trading cards over Funko POPs
     let query = cleanPlayer || '';
     if (searchSet) query += ' ' + searchSet;
     if (searchYear) query += ' ' + searchYear;
@@ -313,6 +314,10 @@ export class SportsCardProClient {
     if (searchParallel) query += ' ' + searchParallel;
     if (searchIsAuto) query += ' auto';
     query = query.trim();
+    // Append "cards" to help filter out Funko POPs from results
+    if (query && !query.toLowerCase().includes('card')) {
+      query += ' cards';
+    }
 
     if (!query || query.length < 5) {
       console.log('  SportsCardPro: Query too short, skipping');
@@ -334,10 +339,11 @@ export class SportsCardProClient {
 
       // Find best matching product - check if it actually matches our search
       let product = null;
-      const playerLower = (searchPlayer || '').toLowerCase().trim();
+      // Use cleanPlayer (e.g., "LeBron James") for name matching, not the full title
+      const playerLower = (cleanPlayer || searchPlayer || '').toLowerCase().trim();
       const playerParts = playerLower.split(/\s+/);
       const firstName = playerParts[0] || '';
-      const lastName = playerParts[playerParts.length - 1] || '';
+      const lastName = playerParts.length > 1 ? playerParts[playerParts.length - 1] : '';
 
       // Debug: log what we're looking for and first few products
       console.log(`  Looking for firstName="${firstName}" lastName="${lastName}"`);
