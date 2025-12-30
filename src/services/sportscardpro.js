@@ -128,6 +128,65 @@ export class SportsCardProClient {
   }
 
   /**
+   * Parse SportsCardPro product info to extract structured data
+   * Example: console="2024 Panini Prizm", product="LeBron James [Green Pulsar] #130"
+   */
+  parseSCPProduct(consoleName, productName) {
+    const result = {
+      year: null,
+      set: null,
+      cardNumber: null,
+      parallel: null,
+      isAuto: false
+    };
+
+    // Extract year from console name (e.g., "2024 Panini Prizm" → 2024)
+    const yearMatch = consoleName.match(/\b(19[89]\d|20[0-2]\d)\b/);
+    if (yearMatch) result.year = yearMatch[1];
+
+    // Extract card number from product name (e.g., "#130" → "130")
+    const cardMatch = productName.match(/#(\d{1,4})\b/);
+    if (cardMatch) result.cardNumber = cardMatch[1];
+
+    // Extract parallel from product name (e.g., "[Green Pulsar]" → "green pulsar")
+    const parallelMatch = productName.match(/\[([^\]]+)\]/);
+    if (parallelMatch) {
+      result.parallel = parallelMatch[1].toLowerCase().trim();
+    }
+
+    // Extract set from console name
+    const consoleUpper = consoleName.toUpperCase();
+    const setPatterns = [
+      { pattern: /PRIZM\s+GLOBAL\s+REACH/i, name: 'prizm global reach' },
+      { pattern: /PRIZM\s+DRAFT\s+PICKS/i, name: 'prizm draft picks' },
+      { pattern: /HOOPS\s*PREMIUM\s*STOCK/i, name: 'hoops premium stock' },
+      { pattern: /TOPPS\s*CHROME/i, name: 'topps chrome' },
+      { pattern: /BOWMAN\s*CHROME/i, name: 'bowman chrome' },
+      { pattern: /\bPRIZM\b/i, name: 'prizm' },
+      { pattern: /\bOPTIC\b/i, name: 'optic' },
+      { pattern: /\bSELECT\b/i, name: 'select' },
+      { pattern: /\bMOSAIC\b/i, name: 'mosaic' },
+      { pattern: /\bHOOPS\b/i, name: 'hoops' },
+      { pattern: /\bDONRUSS\b/i, name: 'donruss' },
+      { pattern: /\bCONTENDERS\b/i, name: 'contenders' },
+      { pattern: /\bBOWMAN\b/i, name: 'bowman' },
+      { pattern: /\bTOPPS\b/i, name: 'topps' },
+    ];
+    for (const { pattern, name } of setPatterns) {
+      if (pattern.test(consoleName)) {
+        result.set = name;
+        break;
+      }
+    }
+
+    // Check for autograph
+    const combined = (consoleName + ' ' + productName).toLowerCase();
+    result.isAuto = combined.includes('auto') || combined.includes('autograph') || combined.includes('signed');
+
+    return result;
+  }
+
+  /**
    * Search for cards and get prices
    * Returns up to 20 matching results
    */
@@ -208,13 +267,42 @@ export class SportsCardProClient {
       }
     }
 
-    // Extract common set names
-    const sets = ['Prizm', 'Optic', 'Select', 'Mosaic', 'Contenders', 'Hoops', 'Donruss',
-                  'Topps Chrome', 'Bowman', 'Upper Deck', 'Fleer', 'Panini', 'Revolution'];
+    // Extract common set names - check for full set patterns first
+    // Avoid matching parallel names like "Pulsar Prizm" as the set
+    // Check specific insert sets FIRST, then base sets
+    const setPatterns = [
+      // Specific Prizm insert sets (must check before base "Prizm")
+      { pattern: /PRIZM\s+GLOBAL\s+REACH/i, name: 'Prizm Global Reach' },
+      { pattern: /PRIZM\s+DRAFT\s+PICKS/i, name: 'Prizm Draft Picks' },
+      { pattern: /PRIZM\s+INSTANT\s+IMPACT/i, name: 'Prizm Instant Impact' },
+      { pattern: /PRIZM\s+EMERGENT/i, name: 'Prizm Emergent' },
+      { pattern: /PRIZM\s+SENSATIONAL/i, name: 'Prizm Sensational' },
+      // Other specific sets
+      { pattern: /HOOPS\s*PREMIUM\s*STOCK/i, name: 'Hoops Premium Stock' },
+      { pattern: /TOPPS\s*CHROME/i, name: 'Topps Chrome' },
+      { pattern: /BOWMAN\s*CHROME/i, name: 'Bowman Chrome' },
+      { pattern: /UPPER\s*DECK/i, name: 'Upper Deck' },
+      // Base sets - year + set name pattern (e.g., "2023 Prizm")
+      { pattern: /\b20\d{2}[-\s]+PRIZM\b/i, name: 'Prizm' },
+      { pattern: /\b20\d{2}[-\s]+OPTIC\b/i, name: 'Optic' },
+      { pattern: /\b20\d{2}[-\s]+SELECT\b/i, name: 'Select' },
+      { pattern: /\b20\d{2}[-\s]+MOSAIC\b/i, name: 'Mosaic' },
+      { pattern: /PANINI\s+PRIZM\b/i, name: 'Prizm' },
+      { pattern: /PANINI\s+OPTIC/i, name: 'Optic' },
+      { pattern: /DONRUSS\s+OPTIC/i, name: 'Optic' },
+      { pattern: /PANINI\s+SELECT/i, name: 'Select' },
+      { pattern: /PANINI\s+MOSAIC/i, name: 'Mosaic' },
+      { pattern: /PANINI\s+CONTENDERS/i, name: 'Contenders' },
+      { pattern: /\bHOOPS\b/i, name: 'Hoops' },
+      { pattern: /\bDONRUSS\b/i, name: 'Donruss' },
+      { pattern: /\bBOWMAN\b/i, name: 'Bowman' },
+      { pattern: /\bFLEER\b/i, name: 'Fleer' },
+      { pattern: /\bREVOLUTION\b/i, name: 'Revolution' },
+    ];
     let set = null;
-    for (const s of sets) {
-      if (titleUpper.includes(s.toUpperCase())) {
-        set = s;
+    for (const { pattern, name } of setPatterns) {
+      if (pattern.test(title)) {
+        set = name;
         break;
       }
     }
@@ -256,13 +344,13 @@ export class SportsCardProClient {
    * Get market value for a card
    * Searches by title and returns appropriate graded price
    */
-  async getMarketValue({ player, year, set, grade, cardNumber, imageUrl, sport }) {
+  async getMarketValue({ player, year, set, grade, cardNumber, parallel, imageUrl, sport }) {
     let searchYear = year;
     let searchSet = set;
     let searchNumber = cardNumber;
     let searchPlayer = player;
     let searchGrade = grade;
-    let searchParallel = null;
+    let searchParallel = parallel || null;  // Use passed parallel if provided
     let searchIsAuto = false;
     const searchSport = sport;
 
@@ -313,12 +401,14 @@ export class SportsCardProClient {
         }
       }
 
-      // Always parse title to extract clean details
+      // Parse title for player name and auto status only
+      // Card number and parallel MUST come from eBay parser - no fallback
       const parsed = this.parseTitle(player);
-      if (parsed.year) searchYear = parsed.year;
-      if (parsed.set) searchSet = parsed.set;
+      if (!searchYear && parsed.year) searchYear = parsed.year;
+      if (!searchSet && parsed.set) searchSet = parsed.set;
+      // NO fallback for cardNumber - must be provided by caller
+      // NO fallback for parallel - must be provided by caller
       if (parsed.player) searchPlayer = parsed.player;
-      if (parsed.parallel) searchParallel = parsed.parallel;
       if (parsed.isAuto) searchIsAuto = parsed.isAuto;
     }
 
@@ -345,8 +435,14 @@ export class SportsCardProClient {
       return null;
     }
 
+    // REQUIRED: Card number must be provided - no fallback parsing
+    if (!searchNumber) {
+      console.log('  SportsCardPro: Card # not found, skipping (no fallback)');
+      return null;
+    }
+
     // Log what we're searching for - all criteria must match
-    console.log(`  SportsCardPro: Searching "${query}" #${searchNumber || '?'} ${searchYear || '?'} ${searchSet || '?'} ${searchParallel || 'base'}`);
+    console.log(`  SportsCardPro: Searching "${query}" #${searchNumber} ${searchYear || '?'} ${searchSet || '?'} ${searchParallel || 'base'}`);
 
     try {
       const products = await this.searchCards(query, searchSport);
@@ -367,83 +463,81 @@ export class SportsCardProClient {
       let cardCount = 0;
       let nameMatchCount = 0;
       for (const p of products) {
-        const productName = (p['product-name'] || '').toLowerCase();
-        const consoleName = (p['console-name'] || '').toLowerCase();
+        const productName = (p['product-name'] || '');
+        const consoleName = (p['console-name'] || '');
+        const productNameLower = productName.toLowerCase();
+        const consoleNameLower = consoleName.toLowerCase();
 
         // MUST be actual trading cards - check for known card brands or card categories
         const brands = ['panini', 'topps', 'fleer', 'upper deck', 'bowman', 'donruss', 'prizm', 'select', 'mosaic', 'optic', 'chrome',
           'basketball cards', 'baseball cards', 'football cards', 'hockey cards', 'soccer cards'];
         // Must NOT be Funko POP
-        if (consoleName.includes('funko') || productName.includes('funko')) {
+        if (consoleNameLower.includes('funko') || productNameLower.includes('funko')) {
           continue;
         }
-        const isTradingCard = brands.some(b => consoleName.includes(b) || productName.includes(b));
+        const isTradingCard = brands.some(b => consoleNameLower.includes(b) || productNameLower.includes(b));
         if (!isTradingCard) {
           continue;
         }
         cardCount++;
 
         // Require BOTH first and last name to be in the product name
-        const hasFirstName = firstName && productName.includes(firstName);
-        const hasLastName = lastName && productName.includes(lastName);
+        const hasFirstName = firstName && productNameLower.includes(firstName);
+        const hasLastName = lastName && productNameLower.includes(lastName);
 
         if (!hasFirstName || !hasLastName) {
           continue; // Skip if doesn't have both names
         }
         nameMatchCount++;
 
-        // STRICT MATCHING - ALL criteria must match or skip
+        // PARSE SportsCardPro product to get structured data
+        const scpData = this.parseSCPProduct(consoleName, productName);
 
-        // 1. Card number MUST be present and match
-        if (!searchNumber) {
-          continue; // Can't match without card #
-        }
-        const hasCardNumber = productName.includes('#' + searchNumber);
-        if (!hasCardNumber) {
+        // STRICT MATCHING - Compare structured data directly (no substring matching)
+
+        // 1. Card number must match EXACTLY
+        if (searchNumber !== scpData.cardNumber) {
+          console.log(`    REJECT: Card # mismatch (${searchNumber} vs ${scpData.cardNumber}) - ${productName.substring(0, 40)}`);
           continue;
         }
 
-        // 2. Year MUST be present and match
-        if (!searchYear) {
-          continue; // Can't match without year
-        }
-        const yearMatch = consoleName.includes(searchYear) || productName.includes(searchYear);
-        if (!yearMatch) {
+        // 2. Year must match EXACTLY
+        if (!searchYear || searchYear !== scpData.year) {
+          console.log(`    REJECT: Year mismatch (${searchYear} vs ${scpData.year}) - ${productName.substring(0, 40)}`);
           continue;
         }
 
-        // 3. Set MUST be present and match exactly
+        // 3. Set must match (normalize both to lowercase for comparison)
         if (!searchSet) {
-          continue; // Can't match without set
+          console.log(`    REJECT: No set info - ${productName.substring(0, 40)}`);
+          continue;
         }
-        const searchSetLower = searchSet.toLowerCase();
-        const setInConsole = consoleName.includes(searchSetLower);
-        const setInProduct = productName.includes(searchSetLower);
-        if (!setInConsole && !setInProduct) {
+        const searchSetNorm = searchSet.toLowerCase().replace(/\s+/g, ' ').trim();
+        const scpSetNorm = (scpData.set || '').toLowerCase().replace(/\s+/g, ' ').trim();
+        if (searchSetNorm !== scpSetNorm) {
+          console.log(`    REJECT: Set mismatch (${searchSetNorm} vs ${scpSetNorm}) - ${productName.substring(0, 40)}`);
           continue;
         }
 
-        // 4. Parallel must match (base = no parallel keyword in product)
-        const searchParallelLower = (searchParallel || '').toLowerCase();
-        if (searchParallelLower) {
-          // Looking for specific parallel - must be in product
-          const hasParallel = productName.includes(searchParallelLower) || consoleName.includes(searchParallelLower);
-          if (!hasParallel) {
-            continue;
-          }
+        // 4. Parallel must match (null/empty = base card)
+        const searchParallelNorm = (searchParallel || '').toLowerCase().trim();
+        const scpParallelNorm = (scpData.parallel || '').toLowerCase().trim();
+        if (searchParallelNorm !== scpParallelNorm) {
+          console.log(`    REJECT: Parallel mismatch (${searchParallelNorm || 'base'} vs ${scpParallelNorm || 'base'}) - ${productName.substring(0, 40)}`);
+          continue;
         }
-        // If no parallel specified (base card), that's fine - we don't require "base" keyword
 
         // 5. Autograph status must match
-        const productIsAuto = productName.includes('auto') || productName.includes('autograph') || productName.includes('signed');
-        if (searchIsAuto !== productIsAuto) {
+        if (searchIsAuto !== scpData.isAuto) {
+          console.log(`    REJECT: Auto mismatch - ${productName.substring(0, 40)}`);
           continue;
         }
 
         // ALL CRITERIA MATCHED!
         product = p;
-        console.log(`  SportsCardPro: MATCH ${p['console-name']} - ${p['product-name']}`);
-        console.log(`    #${searchNumber}, ${searchYear}, ${searchSet}, ${searchParallel || 'base'}, auto=${searchIsAuto}`);
+        console.log(`  SportsCardPro: EXACT MATCH`);
+        console.log(`    eBay:  #${searchNumber}, ${searchYear}, ${searchSet}, ${searchParallel || 'base'}, auto=${searchIsAuto}`);
+        console.log(`    SCP:   #${scpData.cardNumber}, ${scpData.year}, ${scpData.set}, ${scpData.parallel || 'base'}, auto=${scpData.isAuto}`);
         break;
       }
 

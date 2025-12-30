@@ -6,7 +6,10 @@ import knex from 'knex';
 
 const dbConfig = {
   client: 'pg',
-  connection: process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/cardsnipe_dev',
+  connection: {
+    connectionString: process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/cardsnipe_dev',
+    ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : false
+  },
   pool: { min: 2, max: 10 }
 };
 

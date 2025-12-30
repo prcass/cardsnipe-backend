@@ -154,27 +154,114 @@ export class EbayClient {
   // ============================================
 
   transformListings(items) {
-    return items.map(item => ({
-      ebayItemId: item.itemId,
-      title: item.title,
-      currentPrice: parseFloat(item.price?.value || 0),
-      currency: item.price?.currency || 'USD',
-      isAuction: item.buyingOptions?.includes('AUCTION') || false,
-      auctionEndTime: item.itemEndDate ? new Date(item.itemEndDate) : null,
-      bidCount: item.bidCount || 0,
-      imageUrl: item.image?.imageUrl || item.thumbnailImages?.[0]?.imageUrl,
-      listingUrl: item.itemWebUrl,
-      condition: item.condition,
-      sellerName: item.seller?.username,
-      sellerRating: item.seller?.feedbackPercentage,
-      sellerFeedbackCount: item.seller?.feedbackScore,
-      location: item.itemLocation?.postalCode,
-      shippingCost: item.shippingOptions?.[0]?.shippingCost?.value || null,
-      watchCount: item.watchCount || 0,
-      
-      // We'll parse these from the title
-      ...this.parseCardDetails(item.title)
-    }));
+    return items.map(item => {
+      // Extract structured data from eBay's localizedAspects (item specifics)
+      const aspects = this.extractAspects(item.localizedAspects || []);
+
+      // Fall back to title parsing only if aspects not available
+      const parsedFromTitle = (!aspects.year || !aspects.cardNumber)
+        ? this.parseCardDetails(item.title)
+        : {};
+
+      return {
+        ebayItemId: item.itemId,
+        title: item.title,
+        currentPrice: parseFloat(item.price?.value || 0),
+        currency: item.price?.currency || 'USD',
+        isAuction: item.buyingOptions?.includes('AUCTION') || false,
+        auctionEndTime: item.itemEndDate ? new Date(item.itemEndDate) : null,
+        bidCount: item.bidCount || 0,
+        imageUrl: item.image?.imageUrl || item.thumbnailImages?.[0]?.imageUrl,
+        listingUrl: item.itemWebUrl,
+        condition: item.condition,
+        sellerName: item.seller?.username,
+        sellerRating: item.seller?.feedbackPercentage,
+        sellerFeedbackCount: item.seller?.feedbackScore,
+        location: item.itemLocation?.postalCode,
+        shippingCost: item.shippingOptions?.[0]?.shippingCost?.value || null,
+        watchCount: item.watchCount || 0,
+
+        // Prefer structured eBay aspects, fall back to parsed title
+        year: aspects.year || parsedFromTitle.year,
+        setName: aspects.setName || parsedFromTitle.setName,
+        cardNumber: aspects.cardNumber || parsedFromTitle.cardNumber,
+        parallel: aspects.parallel || parsedFromTitle.parallel,
+        playerName: aspects.playerName || parsedFromTitle.playerName,
+        grader: aspects.grader || parsedFromTitle.grader,
+        grade: aspects.grade || parsedFromTitle.grade,
+        sport: aspects.sport || parsedFromTitle.sport,
+        isAuto: aspects.isAuto || parsedFromTitle.isAuto || false,
+      };
+    });
+  }
+
+  /**
+   * Extract structured data from eBay's localizedAspects
+   * These are seller-provided item specifics - much more reliable than title parsing
+   */
+  extractAspects(localizedAspects) {
+    const result = {
+      year: null,
+      setName: null,
+      cardNumber: null,
+      parallel: null,
+      playerName: null,
+      grader: null,
+      grade: null,
+      sport: null,
+      isAuto: false,
+    };
+
+    for (const aspect of localizedAspects) {
+      const name = (aspect.name || '').toLowerCase();
+      const value = aspect.value || '';
+
+      // Year/Season
+      if (name === 'year' || name === 'season' || name === 'year manufactured') {
+        const yearMatch = value.match(/\b(19[89]\d|20[0-2]\d)\b/);
+        if (yearMatch) result.year = parseInt(yearMatch[1]);
+      }
+      // Set/Series
+      else if (name === 'set' || name === 'series' || name === 'product') {
+        result.setName = value;
+      }
+      // Card Number
+      else if (name === 'card number' || name === 'card #') {
+        result.cardNumber = value.replace(/^#/, '').trim();
+      }
+      // Parallel/Variation
+      else if (name === 'parallel/variety' || name === 'parallel' || name === 'variation' || name === 'insert') {
+        result.parallel = value.toLowerCase();
+      }
+      // Player/Athlete
+      else if (name === 'player' || name === 'athlete' || name === 'player/athlete') {
+        result.playerName = value;
+      }
+      // Grading Company
+      else if (name === 'professional grader' || name === 'grader' || name === 'grading company') {
+        result.grader = value.toUpperCase();
+      }
+      // Grade
+      else if (name === 'grade' || name === 'certification number') {
+        result.grade = value;
+      }
+      // Sport
+      else if (name === 'sport') {
+        result.sport = value.toLowerCase();
+      }
+      // Autograph
+      else if (name === 'autograph' || name === 'autographed') {
+        result.isAuto = value.toLowerCase() === 'yes' || value.toLowerCase() === 'true';
+      }
+      // Features (may include autograph info)
+      else if (name === 'features') {
+        if (value.toLowerCase().includes('auto')) {
+          result.isAuto = true;
+        }
+      }
+    }
+
+    return result;
   }
 
   /**
@@ -229,13 +316,25 @@ export class EbayClient {
       result.sport = 'baseball';
     }
 
-    // Extract card number
-    const numberMatch = title.match(/#\s*(\d+)/);
-    if (numberMatch) result.cardNumber = numberMatch[1];
+    // Extract card number - try multiple patterns
+    const cardNumPatterns = [
+      /#\s*(\d{1,4})\b/,           // #129, # 129
+      /\bNo\.?\s*(\d{1,4})\b/i,    // No. 129, No 129
+      /\bCard\s*#?(\d{1,4})\b/i,   // Card #129, Card 129
+      /\s(\d{1,4})\/\d+\b/,        // 129/500 (numbered cards)
+    ];
+    for (const pattern of cardNumPatterns) {
+      const match = title.match(pattern);
+      if (match && match[1]) {
+        result.cardNumber = match[1];
+        break;
+      }
+    }
 
     // Detect parallels
-    const parallels = ['SILVER', 'GOLD', 'RED', 'BLUE', 'GREEN', 'ORANGE', 'PURPLE', 'BLACK', 'PINK', 
-                       'SHIMMER', 'HOLO', 'REFRACTOR', 'MOJO', 'SCOPE', 'WAVE'];
+    const parallels = ['SILVER', 'GOLD', 'RED', 'BLUE', 'GREEN', 'ORANGE', 'PURPLE', 'BLACK', 'PINK',
+                       'SHIMMER', 'HOLO', 'REFRACTOR', 'MOJO', 'SCOPE', 'WAVE', 'PULSAR', 'HYPER',
+                       'DISCO', 'TIGER', 'CAMO', 'ICE', 'NEON', 'LASER', 'FAST BREAK'];
     for (const parallel of parallels) {
       if (titleUpper.includes(parallel)) {
         result.parallel = parallel.charAt(0) + parallel.slice(1).toLowerCase();
@@ -243,12 +342,39 @@ export class EbayClient {
       }
     }
 
-    // Detect set names
-    const sets = ['PRIZM', 'OPTIC', 'SELECT', 'MOSAIC', 'HOOPS', 'CONTENDERS', 'CHRONICLES',
-                  'TOPPS CHROME', 'BOWMAN CHROME', 'BOWMAN', 'STADIUM CLUB', 'DONRUSS'];
-    for (const set of sets) {
-      if (titleUpper.includes(set)) {
-        result.setName = set.split(' ').map(w => w.charAt(0) + w.slice(1).toLowerCase()).join(' ');
+    // Detect set names - use patterns to avoid matching parallels like "Pulsar Prizm"
+    // Check specific insert sets FIRST, then base sets
+    const setPatterns = [
+      // Specific Prizm insert sets (must check before base "Prizm")
+      { pattern: /PRIZM\s+GLOBAL\s+REACH/i, name: 'Prizm Global Reach' },
+      { pattern: /PRIZM\s+DRAFT\s+PICKS/i, name: 'Prizm Draft Picks' },
+      { pattern: /PRIZM\s+INSTANT\s+IMPACT/i, name: 'Prizm Instant Impact' },
+      { pattern: /PRIZM\s+EMERGENT/i, name: 'Prizm Emergent' },
+      { pattern: /PRIZM\s+SENSATIONAL/i, name: 'Prizm Sensational' },
+      // Other specific sets
+      { pattern: /HOOPS\s*PREMIUM\s*STOCK/i, name: 'Hoops Premium Stock' },
+      { pattern: /TOPPS\s*CHROME/i, name: 'Topps Chrome' },
+      { pattern: /BOWMAN\s*CHROME/i, name: 'Bowman Chrome' },
+      { pattern: /STADIUM\s*CLUB/i, name: 'Stadium Club' },
+      // Base sets - year + set name pattern (e.g., "2023 Prizm")
+      { pattern: /\b20\d{2}[-\s]+PRIZM\b/i, name: 'Prizm' },
+      { pattern: /\b20\d{2}[-\s]+OPTIC\b/i, name: 'Optic' },
+      { pattern: /\b20\d{2}[-\s]+SELECT\b/i, name: 'Select' },
+      { pattern: /\b20\d{2}[-\s]+MOSAIC\b/i, name: 'Mosaic' },
+      { pattern: /PANINI\s+PRIZM\b/i, name: 'Prizm' },
+      { pattern: /PANINI\s+OPTIC/i, name: 'Optic' },
+      { pattern: /DONRUSS\s+OPTIC/i, name: 'Optic' },
+      { pattern: /PANINI\s+SELECT/i, name: 'Select' },
+      { pattern: /PANINI\s+MOSAIC/i, name: 'Mosaic' },
+      { pattern: /PANINI\s+CONTENDERS/i, name: 'Contenders' },
+      { pattern: /PANINI\s+CHRONICLES/i, name: 'Chronicles' },
+      { pattern: /\bHOOPS\b/i, name: 'Hoops' },
+      { pattern: /\bDONRUSS\b/i, name: 'Donruss' },
+      { pattern: /\bBOWMAN\b/i, name: 'Bowman' },
+    ];
+    for (const { pattern, name } of setPatterns) {
+      if (pattern.test(title)) {
+        result.setName = name;
         break;
       }
     }

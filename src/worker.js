@@ -58,13 +58,15 @@ function buildQueries(player) {
 }
 
 async function getMarketValue(listing, sport) {
-  // Use the full title for exact card matching
+  // Use parsed card details from eBay client for exact matching
   try {
     const result = await pricing.getMarketValue({
-      player: listing.title,  // Full title for exact match
+      player: listing.title,  // Full title for player name extraction
       year: listing.year,
-      set: listing.set,
+      set: listing.setName,  // Use setName from eBay parser (not 'set')
       grade: listing.grade,
+      cardNumber: listing.cardNumber,  // Card # is KEY for matching
+      parallel: listing.parallel,  // Color/variant must match
       imageUrl: listing.imageUrl,  // For OCR cert extraction
       sport: sport  // For category filtering (basketball, baseball, football)
     });

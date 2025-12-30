@@ -24,8 +24,8 @@ export class PriceService {
    * Get market value for a card
    * Returns source, URL, and date for transparency
    */
-  async getMarketValue({ player, year, set, grade, cardNumber, imageUrl, sport }) {
-    const cacheKey = `${player}:${year}:${set}:${grade}:${cardNumber || ''}:${sport || ''}`.toLowerCase();
+  async getMarketValue({ player, year, set, grade, cardNumber, parallel, imageUrl, sport }) {
+    const cacheKey = `${player}:${year}:${set}:${grade}:${cardNumber || ''}:${parallel || ''}:${sport || ''}`.toLowerCase();
 
     // Check cache
     const cached = this.cache.get(cacheKey);
@@ -38,7 +38,7 @@ export class PriceService {
     // 1. Try SportsCardPro (primary source)
     if (hasSportsCardProToken) {
       try {
-        result = await sportsCardPro.getMarketValue({ player, year, set, grade, cardNumber, imageUrl, sport });
+        result = await sportsCardPro.getMarketValue({ player, year, set, grade, cardNumber, parallel, imageUrl, sport });
         if (result && result.marketValue) {
           result.confidence = 'high';
         }
