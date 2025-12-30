@@ -57,7 +57,7 @@ function buildQueries(player) {
   ];
 }
 
-async function getMarketValue(listing) {
+async function getMarketValue(listing, sport) {
   // Use the full title for exact card matching
   try {
     const result = await pricing.getMarketValue({
@@ -65,7 +65,8 @@ async function getMarketValue(listing) {
       year: listing.year,
       set: listing.set,
       grade: listing.grade,
-      imageUrl: listing.imageUrl  // For OCR cert extraction
+      imageUrl: listing.imageUrl,  // For OCR cert extraction
+      sport: sport  // For category filtering (basketball, baseball, football)
     });
     // Return null if unknown - don't estimate
     if (!result || result.source === 'unknown' || !result.marketValue) {
@@ -106,7 +107,7 @@ async function processListings(listings, sport, platform) {
   let saved = 0;
   for (const listing of listings) {
     try {
-      const marketData = await getMarketValue(listing);
+      const marketData = await getMarketValue(listing, sport);
       
       // Skip if market value unknown - don't guess
       if (marketData === null) {

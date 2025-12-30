@@ -115,15 +115,34 @@ export class SportsCardProClient {
   }
 
   /**
+   * Get category name for sport
+   */
+  getCategoryForSport(sport) {
+    const categories = {
+      'basketball': 'Basketball Cards',
+      'baseball': 'Baseball Cards',
+      'football': 'Football Cards'
+    };
+    return categories[sport?.toLowerCase()] || null;
+  }
+
+  /**
    * Search for cards and get prices
    * Returns up to 20 matching results
    */
-  async searchCards(query) {
+  async searchCards(query, sport) {
     if (!this.token) {
       throw new Error('SPORTSCARDPRO_TOKEN not configured');
     }
 
-    const url = `${this.baseUrl}/api/products?t=${this.token}&q=${encodeURIComponent(query)}`;
+    // Build URL with optional category filter
+    let url = `${this.baseUrl}/api/products?t=${this.token}&q=${encodeURIComponent(query)}`;
+
+    // Add category filter if sport is specified
+    const category = this.getCategoryForSport(sport);
+    if (category) {
+      url += `&console=${encodeURIComponent(category)}`;
+    }
 
     try {
       const response = await fetch(url, {
@@ -229,7 +248,7 @@ export class SportsCardProClient {
    * Get market value for a card
    * Searches by title and returns appropriate graded price
    */
-  async getMarketValue({ player, year, set, grade, cardNumber, imageUrl }) {
+  async getMarketValue({ player, year, set, grade, cardNumber, imageUrl, sport }) {
     let searchYear = year;
     let searchSet = set;
     let searchNumber = cardNumber;
@@ -237,6 +256,7 @@ export class SportsCardProClient {
     let searchGrade = grade;
     let searchParallel = null;
     let searchIsAuto = false;
+    const searchSport = sport;
 
     // Extract grade from title if not provided
     if (!searchGrade && player) {
@@ -327,10 +347,11 @@ export class SportsCardProClient {
     if (searchParallel || searchIsAuto) {
       console.log(`  SportsCardPro: Detected parallel=${searchParallel || 'none'}, auto=${searchIsAuto}`);
     }
-    console.log(`  SportsCardPro: Searching "${query}"`);
+    const category = this.getCategoryForSport(searchSport);
+    console.log(`  SportsCardPro: Searching "${query}" in ${category || 'all categories'}`);
 
     try {
-      const products = await this.searchCards(query);
+      const products = await this.searchCards(query, searchSport);
 
       if (!products || products.length === 0) {
         console.log('  SportsCardPro: No results found');
