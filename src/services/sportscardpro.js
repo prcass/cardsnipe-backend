@@ -441,10 +441,7 @@ export class SportsCardProClient {
 
         // Check for EXACT match on all criteria (normalize types)
         const cardMatch = String(searchNumber) === String(scpData.cardNumber);
-        // Year match: allow +/- 1 year for seasons spanning two calendar years (e.g., 2019-20 season)
-        const searchYearNum = parseInt(searchYear, 10);
-        const scpYearNum = parseInt(scpData.year, 10);
-        const yearMatch = !isNaN(searchYearNum) && !isNaN(scpYearNum) && Math.abs(searchYearNum - scpYearNum) <= 1;
+        const yearMatch = String(searchYear) === String(scpData.year);
         const setMatch = searchSet.toLowerCase() === (scpData.set || '').toLowerCase();
 
         // Parallel matching: be STRICT to avoid false matches
