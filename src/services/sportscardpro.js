@@ -352,6 +352,7 @@ export class SportsCardProClient {
       }
 
       // Fallback to loose price if graded price not available
+      if (!priceInPennies) console.log('  No graded price. PSA10=' + product['manual-only-price'] + ' PSA9=' + product['graded-price'] + ' loose=' + product['loose-price']);
       if (!priceInPennies) {
         priceInPennies = product['loose-price'];
         priceKey = 'loose-price';
