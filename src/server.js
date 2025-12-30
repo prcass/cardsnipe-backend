@@ -443,8 +443,7 @@ app.delete('/api/players/:id', async (req, res) => {
 app.get('/api/teams', (req, res) => {
   const teams = {
     basketball: Object.keys(teamRosters.nba).sort(),
-    baseball: Object.keys(teamRosters.mlb).sort(),
-    football: Object.keys(teamRosters.nfl).sort()
+    baseball: Object.keys(teamRosters.mlb).sort()
   };
   res.json({ success: true, data: teams });
 });

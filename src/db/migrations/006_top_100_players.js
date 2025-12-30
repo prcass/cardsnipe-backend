@@ -96,38 +96,7 @@ export async function up(knex) {
     // Top Prospects
     { name: 'Jackson Chourio', sport: 'baseball', active: true },
     { name: 'Jasson Dominguez', sport: 'baseball', active: true },
-    { name: 'Junior Caminero', sport: 'baseball', active: true },
-
-    // ========== FOOTBALL (25 players) ==========
-    // Quarterbacks
-    { name: 'Patrick Mahomes', sport: 'football', active: true },
-    { name: 'Josh Allen', sport: 'football', active: true },
-    { name: 'Joe Burrow', sport: 'football', active: true },
-    { name: 'Lamar Jackson', sport: 'football', active: true },
-    { name: 'Justin Herbert', sport: 'football', active: true },
-    { name: 'Trevor Lawrence', sport: 'football', active: true },
-    { name: 'Jalen Hurts', sport: 'football', active: true },
-    { name: 'C.J. Stroud', sport: 'football', active: true },
-    { name: 'Caleb Williams', sport: 'football', active: true },
-    { name: 'Jayden Daniels', sport: 'football', active: true },
-    // Skill Players
-    { name: 'Tyreek Hill', sport: 'football', active: true },
-    { name: 'Justin Jefferson', sport: 'football', active: true },
-    { name: 'Ja\'Marr Chase', sport: 'football', active: true },
-    { name: 'CeeDee Lamb', sport: 'football', active: true },
-    { name: 'Amon-Ra St. Brown', sport: 'football', active: true },
-    { name: 'Puka Nacua', sport: 'football', active: true },
-    { name: 'Marvin Harrison Jr', sport: 'football', active: true },
-    { name: 'Bijan Robinson', sport: 'football', active: true },
-    { name: 'Breece Hall', sport: 'football', active: true },
-    { name: 'Travis Kelce', sport: 'football', active: true },
-    // Defense
-    { name: 'Micah Parsons', sport: 'football', active: true },
-    { name: 'T.J. Watt', sport: 'football', active: true },
-    { name: 'Sauce Gardner', sport: 'football', active: true },
-    // Legends
-    { name: 'Tom Brady', sport: 'football', active: true },
-    { name: 'Peyton Manning', sport: 'football', active: true }
+    { name: 'Junior Caminero', sport: 'baseball', active: true }
   ];
 
   await knex('monitored_players').insert(players);

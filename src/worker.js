@@ -47,7 +47,7 @@ async function fetchSettings() {
 async function getMonitoredPlayers() {
   try {
     const players = await db('monitored_players').where({ active: true });
-    const result = { basketball: [], baseball: [], football: [] };
+    const result = { basketball: [], baseball: [] };
     for (const p of players) {
       if (result[p.sport]) {
         result[p.sport].push(p.name);
@@ -292,14 +292,6 @@ async function runWorker() {
         for (const player of monitoredPlayers.baseball) {
           console.log(' ' + player + ':');
           totalNew += await scanPlayer(player, 'baseball');
-        }
-      }
-
-      if (monitoredPlayers.football && monitoredPlayers.football.length > 0) {
-        console.log('Football:');
-        for (const player of monitoredPlayers.football) {
-          console.log(' ' + player + ':');
-          totalNew += await scanPlayer(player, 'football');
         }
       }
 
