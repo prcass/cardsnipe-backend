@@ -6,113 +6,12 @@
  */
 
 import fetch from 'node-fetch';
-import Tesseract from 'tesseract.js';
-import { PSAClient } from './psa.js';
-
-const psa = new PSAClient();
-const hasPSACredentials = process.env.PSA_USERNAME && process.env.PSA_PASSWORD;
 
 export class SportsCardProClient {
   constructor() {
     // Use sportscardspro.com for sports cards (pricecharting.com is for video games)
     this.baseUrl = 'https://www.sportscardspro.com';
     this.token = process.env.SPORTSCARDPRO_TOKEN;
-  }
-
-  /**
-   * Extract PSA cert number from listing title
-   * PSA certs are typically 8-10 digit numbers
-   */
-  extractPSACert(title) {
-    // Look for patterns like "PSA 10 #12345678" or "Cert #12345678" or just long numbers
-    const patterns = [
-      /cert[#:\s]*(\d{7,10})/i,
-      /psa[^0-9]*(\d{7,10})/i,
-      /#(\d{8,10})\b/,
-    ];
-
-    for (const pattern of patterns) {
-      const match = title.match(pattern);
-      if (match && match[1]) {
-        // Verify it looks like a cert (not a card number which is usually 1-4 digits)
-        const num = match[1];
-        if (num.length >= 7) {
-          return num;
-        }
-      }
-    }
-    return null;
-  }
-
-
-  /**
-   * Extract PSA cert number from image using OCR
-   * PSA slabs have the cert number printed on the label
-   */
-  async extractCertFromImage(imageUrl) {
-    if (!imageUrl) return null;
-
-    try {
-      console.log(`  OCR: Scanning image for cert number...`);
-
-      const { data: { text } } = await Tesseract.recognize(imageUrl, 'eng', {
-        logger: () => {} // Suppress progress logs
-      });
-
-      // Look for cert number patterns in OCR text
-      // PSA certs are typically 8-10 digit numbers
-      const patterns = [
-        /(\d{8,10})/g,  // Any 8-10 digit number
-        /cert[#:\s]*(\d{7,10})/gi,
-      ];
-
-      for (const pattern of patterns) {
-        const matches = text.match(pattern);
-        if (matches) {
-          for (const match of matches) {
-            const num = match.replace(/\D/g, '');
-            if (num.length >= 8 && num.length <= 10) {
-              console.log(`  OCR: Found potential cert #${num}`);
-              return num;
-            }
-          }
-        }
-      }
-
-      console.log(`  OCR: No cert number found in image`);
-      return null;
-    } catch (e) {
-      console.log(`  OCR failed: ${e.message}`);
-      return null;
-    }
-  }
-
-  /**
-   * Look up PSA cert to get exact card details
-   */
-  async lookupPSACert(certNumber) {
-    if (!hasPSACredentials) return null;
-
-    try {
-      console.log(`  PSA: Looking up cert #${certNumber}`);
-      const certInfo = await psa.getCertInfo(certNumber);
-
-      if (certInfo && certInfo.PSACert) {
-        const cert = certInfo.PSACert;
-        console.log(`  PSA: Found ${cert.Year} ${cert.Brand} ${cert.Subject} #${cert.CardNumber}`);
-        return {
-          year: cert.Year,
-          set: cert.Brand,
-          player: cert.Subject,
-          cardNumber: cert.CardNumber,
-          grade: `PSA ${cert.CardGrade}`,
-          category: cert.Category
-        };
-      }
-    } catch (e) {
-      console.log(`  PSA cert lookup failed: ${e.message}`);
-    }
-    return null;
   }
 
   /**
@@ -368,46 +267,11 @@ export class SportsCardProClient {
       }
     }
 
-    // If player is a full title, try to extract PSA cert first
+    // Parse title for player name and auto status if needed
     if (player && player.length > 30) {
-      // Try to find PSA cert number in title
-      let certNum = this.extractPSACert(player);
-      if (certNum) {
-        const certInfo = await this.lookupPSACert(certNum);
-        if (certInfo) {
-          // Use exact details from PSA database
-          searchYear = certInfo.year;
-          searchSet = certInfo.set;
-          searchNumber = certInfo.cardNumber;
-          searchPlayer = certInfo.player;
-          searchGrade = certInfo.grade;
-          console.log(`  Using PSA cert: ${searchYear} ${searchSet} ${searchPlayer} #${searchNumber}`);
-        }
-      }
-
-      // If no cert in title, try OCR on image
-      if (!certNum && imageUrl) {
-        certNum = await this.extractCertFromImage(imageUrl);
-        if (certNum) {
-          const certInfo = await this.lookupPSACert(certNum);
-          if (certInfo) {
-            searchYear = certInfo.year;
-            searchSet = certInfo.set;
-            searchNumber = certInfo.cardNumber;
-            searchPlayer = certInfo.player;
-            searchGrade = certInfo.grade;
-            console.log(`  Using OCR cert: ${searchYear} ${searchSet} ${searchPlayer} #${searchNumber}`);
-          }
-        }
-      }
-
-      // Parse title for player name and auto status only
-      // Card number and parallel MUST come from eBay parser - no fallback
       const parsed = this.parseTitle(player);
       if (!searchYear && parsed.year) searchYear = parsed.year;
       if (!searchSet && parsed.set) searchSet = parsed.set;
-      // NO fallback for cardNumber - must be provided by caller
-      // NO fallback for parallel - must be provided by caller
       if (parsed.player) searchPlayer = parsed.player;
       if (parsed.isAuto) searchIsAuto = parsed.isAuto;
     }

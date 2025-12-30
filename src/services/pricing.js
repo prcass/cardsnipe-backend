@@ -1,18 +1,14 @@
 /**
  * Price/Market Value Service
  *
- * Fetches market values from SportsCardPro API
+ * Fetches market values from SportsCardPro API only
  * NO ESTIMATES - returns Unknown if no real data found
  */
 
 import { SportsCardProClient } from './sportscardpro.js';
-import { PSAClient } from './psa.js';
 
 const sportsCardPro = new SportsCardProClient();
-const psa = new PSAClient();
-
 const hasSportsCardProToken = !!process.env.SPORTSCARDPRO_TOKEN;
-const hasPSACredentials = process.env.PSA_ACCESS_TOKEN || (process.env.PSA_USERNAME && process.env.PSA_PASSWORD);
 
 export class PriceService {
   constructor() {
@@ -21,8 +17,7 @@ export class PriceService {
   }
 
   /**
-   * Get market value for a card
-   * Returns source, URL, and date for transparency
+   * Get market value for a card using SportsCardPro
    */
   async getMarketValue({ player, year, set, grade, cardNumber, parallel, imageUrl, sport }) {
     const cacheKey = `${player}:${year}:${set}:${grade}:${cardNumber || ''}:${parallel || ''}:${sport || ''}`.toLowerCase();
@@ -35,7 +30,7 @@ export class PriceService {
 
     let result = null;
 
-    // 1. Try SportsCardPro (primary source)
+    // Use SportsCardPro only
     if (hasSportsCardProToken) {
       try {
         result = await sportsCardPro.getMarketValue({ player, year, set, grade, cardNumber, parallel, imageUrl, sport });
@@ -49,25 +44,7 @@ export class PriceService {
       console.log('SportsCardPro: No API token configured');
     }
 
-    // 2. Fallback to PSA (if credentials configured and card is PSA graded)
-    if (!result && hasPSACredentials && grade && grade.toLowerCase().includes('psa')) {
-      try {
-        const psaData = await psa.getMarketValue({ player, year, set, grade });
-        if (psaData && psaData.marketValue) {
-          result = {
-            marketValue: psaData.marketValue,
-            source: 'psa',
-            sourceUrl: 'https://www.psacard.com/auctionprices',
-            confidence: 'high',
-            lastUpdated: new Date()
-          };
-        }
-      } catch (e) {
-        console.log('PSA lookup failed:', e.message);
-      }
-    }
-
-    // 3. No data found - return unknown (NO ESTIMATES)
+    // No data found - return unknown
     if (!result) {
       return {
         marketValue: null,

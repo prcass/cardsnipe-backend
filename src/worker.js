@@ -118,7 +118,13 @@ async function processListings(listings, sport, platform) {
       }
       
       const dealScore = calculateDealScore(listing.currentPrice, marketData.value);
-      if (dealScore < settings.minDealScore) { console.log("  Skipped (low score): $" + listing.currentPrice + " vs mkt $" + marketData.value + " = " + dealScore + "%"); continue; }
+
+      // Log all matched cards with prices
+      console.log(`  MATCHED: $${listing.currentPrice} vs mkt $${marketData.value} = ${dealScore}% - ${listing.title.substring(0, 35)}`);
+
+      if (dealScore < settings.minDealScore) {
+        continue;
+      }
 
       const itemId = listing.ebayItemId || (platform + '-' + Date.now() + '-' + Math.random().toString(36).slice(2));
       const existing = await db('listings').where('ebay_item_id', itemId).first();
@@ -143,9 +149,7 @@ async function processListings(listings, sport, platform) {
           is_active: true
         });
         saved++;
-        if (dealScore >= 25) {
-          console.log('  HOT DEAL: ' + listing.title.substring(0, 50) + ' - Score: ' + dealScore);
-        }
+        console.log(`  >>> DEAL SAVED: Score ${dealScore}% - ${listing.title.substring(0, 40)}`);
       }
     } catch (e) {
       console.log('  Error saving listing: ' + e.message);
