@@ -158,6 +158,9 @@ export class EbayClient {
       // Extract structured data from eBay's localizedAspects (item specifics)
       const aspects = this.extractAspects(item.localizedAspects || []);
 
+      // Log cert-related aspects for debugging
+      this.logAspects(item.localizedAspects, item.title);
+
       // ALWAYS parse title for parallel detection (eBay aspects often have generic "Blue" instead of "Blue Velocity")
       // Also parse for other fields if aspects are missing
       const parsedFromTitle = this.parseCardDetails(item.title);
@@ -256,6 +259,22 @@ export class EbayClient {
   }
 
   /**
+   * Log available aspects for debugging (first few listings only)
+   */
+  logAspects(aspects, title) {
+    if (!aspects || aspects.length === 0) return;
+    // Find cert-related aspects
+    const certAspects = aspects.filter(a =>
+      a.name.toLowerCase().includes('cert') ||
+      a.name.toLowerCase().includes('psa') ||
+      a.name.toLowerCase().includes('grading')
+    );
+    if (certAspects.length > 0) {
+      console.log(`  eBay aspects with cert/psa/grading: ${certAspects.map(a => `${a.name}=${a.value}`).join(', ')}`);
+    }
+  }
+
+  /**
    * Extract structured data from eBay's localizedAspects
    * These are seller-provided item specifics - much more reliable than title parsing
    */
@@ -307,7 +326,9 @@ export class EbayClient {
         result.grade = value;
       }
       // Certification Number (PSA cert # for API lookup)
-      else if (name === 'certification number' || name === 'cert number' || name === 'psa certification number') {
+      else if (name === 'certification number' || name === 'cert number' || name === 'psa certification number' ||
+               name === 'certification' || name === 'psa #' || name === 'psa number' ||
+               name === 'grading certification number' || name === 'cert #') {
         // Extract just the numeric part (PSA certs are 8-10 digits)
         const certMatch = value.match(/\d{7,10}/);
         if (certMatch) {
