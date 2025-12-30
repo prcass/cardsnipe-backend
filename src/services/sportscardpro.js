@@ -290,6 +290,7 @@ export class SportsCardProClient {
     let query = cleanPlayer || '';
     if (searchSet) query += ' ' + searchSet;
     if (searchYear) query += ' ' + searchYear;
+    if (searchNumber) query += ' #' + searchNumber;
     query = query.trim();
 
     if (!query || query.length < 5) {
@@ -326,7 +327,6 @@ export class SportsCardProClient {
         }
 
         // Require BOTH first and last name to be in the product name
-        // This prevents "James Bond" matching for "LeBron James"
         const hasFirstName = firstName && productName.includes(firstName);
         const hasLastName = lastName && productName.includes(lastName);
 
@@ -334,12 +334,30 @@ export class SportsCardProClient {
           continue; // Skip if doesn't have both names
         }
 
-        // Prefer if year matches
-        if (!searchYear || productName.includes(searchYear)) {
-          product = p;
-          break;
+        // If we have a specific set/brand, require it to match
+        const searchSetLower = (searchSet || '').toLowerCase();
+        if (searchSetLower && !consoleName.includes(searchSetLower) && !productName.includes(searchSetLower)) {
+          continue; // Skip if set doesn't match (e.g., searching Prizm but found Mosaic)
         }
-        if (!product) product = p; // Take first player match as fallback
+
+        // Check for card number match (e.g., "#129" in product name)
+        const hasCardNumber = searchNumber && productName.includes('#' + searchNumber);
+        const yearMatch = searchYear && (consoleName.includes(searchYear) || productName.includes(searchYear));
+
+        if (hasCardNumber && yearMatch) {
+          // EXACT match: player + set + year + card number
+          product = p;
+          console.log('  SportsCardPro: EXACT ' + p['console-name'] + ' - ' + p['product-name']);
+          break;
+        } else if (hasCardNumber || yearMatch) {
+          // Good match
+          if (!product) {
+            product = p;
+            console.log('  SportsCardPro: Match ' + p['console-name'] + ' - ' + p['product-name']);
+          }
+        } else if (!product) {
+          product = p; // Fallback
+        }
       }
 
       if (!product) {
