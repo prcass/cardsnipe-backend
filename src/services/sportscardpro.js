@@ -404,9 +404,21 @@ export class SportsCardProClient {
         };
         const searchParNorm = normalizeParallel(searchParallel);
         const scpParNorm = normalizeParallel(scpData.parallel);
-        const parallelMatch = searchParNorm === scpParNorm ||
-                              scpParNorm.includes(searchParNorm) ||
-                              searchParNorm.includes(scpParNorm);
+
+        // Parallel match logic:
+        // - Base card (no parallel) should ONLY match base card
+        // - Parallel card should match same parallel (with flexible suffix matching)
+        let parallelMatch;
+        if (!searchParNorm && !scpParNorm) {
+          parallelMatch = true;  // Both are base cards
+        } else if (!searchParNorm || !scpParNorm) {
+          parallelMatch = false;  // One is base, one is parallel - no match
+        } else {
+          // Both have parallels - use flexible matching
+          parallelMatch = searchParNorm === scpParNorm ||
+                          scpParNorm.includes(searchParNorm) ||
+                          searchParNorm.includes(scpParNorm);
+        }
 
         const autoMatch = searchIsAuto === scpData.isAuto;
         // Insert set must match if specified (e.g., Splash vs Rainmakers vs All-Stars)
