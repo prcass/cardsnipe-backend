@@ -271,22 +271,22 @@ async function scanPlayer(player, sport) {
       }
     }
 
-    // Also try COMC
-    try {
-      const listings = await comc.searchListings({ query, sport, limit: 15 });
-      if (listings.length > 0) {
-        total += await processListings(listings, sport, 'comc');
-      }
-      await new Promise(r => setTimeout(r, 3000));
-    } catch (e) {
-      // Silent fail
-    }
+    // COMC disabled for now - uncomment to re-enable
+    // try {
+    //   const listings = await comc.searchListings({ query, sport, limit: 15 });
+    //   if (listings.length > 0) {
+    //     total += await processListings(listings, sport, 'comc');
+    //   }
+    //   await new Promise(r => setTimeout(r, 3000));
+    // } catch (e) {
+    //   // Silent fail
+    // }
   }
   return total;
 }
 
 async function runWorker() {
-  console.log('CardSnipe Worker | Sources: ' + (hasEbayKeys ? 'eBay + ' : '') + 'COMC');
+  console.log('CardSnipe Worker | Source: eBay' + (hasEbayKeys ? '' : ' (no keys configured!)'));
 
   while (true) {
     try {
