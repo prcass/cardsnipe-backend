@@ -207,7 +207,22 @@ export class SportsCardProClient {
       }
     }
 
-    return { year, set, cardNumber, player };
+    // Extract parallel/color variant
+    const parallels = ['silver', 'gold', 'blue', 'red', 'green', 'orange', 'purple', 'pink', 'black', 'white',
+      'holo', 'refractor', 'wave', 'shimmer', 'disco', 'tiger', 'camo', 'ice', 'neon', 'pulsar', 'hyper',
+      'pink ice', 'red ice', 'blue ice', 'green ice', 'purple ice', 'fast break', 'instant impact'];
+    let parallel = null;
+    for (const par of parallels) {
+      if (titleUpper.includes(par.toUpperCase())) {
+        parallel = par;
+        break;
+      }
+    }
+
+    // Check for autograph
+    const isAuto = titleUpper.includes('AUTO') || titleUpper.includes('AUTOGRAPH') || titleUpper.includes('SIGNED');
+
+    return { year, set, cardNumber, player, parallel, isAuto };
   }
 
   /**
@@ -220,6 +235,8 @@ export class SportsCardProClient {
     let searchNumber = cardNumber;
     let searchPlayer = player;
     let searchGrade = grade;
+    let searchParallel = null;
+    let searchIsAuto = false;
 
     // Extract grade from title if not provided
     if (!searchGrade && player) {
@@ -273,6 +290,8 @@ export class SportsCardProClient {
       if (parsed.year) searchYear = parsed.year;
       if (parsed.set) searchSet = parsed.set;
       if (parsed.player) searchPlayer = parsed.player;
+      if (parsed.parallel) searchParallel = parsed.parallel;
+      if (parsed.isAuto) searchIsAuto = parsed.isAuto;
     }
 
     // Build SIMPLE query - just player name + optional set
@@ -291,6 +310,8 @@ export class SportsCardProClient {
     if (searchSet) query += ' ' + searchSet;
     if (searchYear) query += ' ' + searchYear;
     if (searchNumber) query += ' #' + searchNumber;
+    if (searchParallel) query += ' ' + searchParallel;
+    if (searchIsAuto) query += ' auto';
     query = query.trim();
 
     if (!query || query.length < 5) {
@@ -298,6 +319,9 @@ export class SportsCardProClient {
       return null;
     }
 
+    if (searchParallel || searchIsAuto) {
+      console.log(`  SportsCardPro: Detected parallel=${searchParallel || 'none'}, auto=${searchIsAuto}`);
+    }
     console.log(`  SportsCardPro: Searching "${query}"`);
 
     try {
@@ -314,6 +338,16 @@ export class SportsCardProClient {
       const playerParts = playerLower.split(/\s+/);
       const firstName = playerParts[0] || '';
       const lastName = playerParts[playerParts.length - 1] || '';
+
+      // Debug: log what we're looking for and first few products
+      console.log(`  Looking for firstName="${firstName}" lastName="${lastName}"`);
+      if (products.length > 0) {
+        console.log('  First 3 products from API:');
+        for (let i = 0; i < Math.min(3, products.length); i++) {
+          const p = products[i];
+          console.log(`    ${i+1}. "${p['console-name']}" - "${p['product-name']}"`);
+        }
+      }
 
       for (const p of products) {
         const productName = (p['product-name'] || '').toLowerCase();
@@ -334,6 +368,9 @@ export class SportsCardProClient {
           continue; // Skip if doesn't have both names
         }
 
+        // Debug: this product passed brand and name filters
+        console.log(`    Checking: "${p['product-name']}" (brand ✓, name ✓)`);
+
         // If we have a specific set/brand, require it to match
         const searchSetLower = (searchSet || '').toLowerCase();
         if (searchSetLower && !consoleName.includes(searchSetLower) && !productName.includes(searchSetLower)) {
@@ -344,8 +381,27 @@ export class SportsCardProClient {
         const hasCardNumber = searchNumber && productName.includes('#' + searchNumber);
         const yearMatch = searchYear && (consoleName.includes(searchYear) || productName.includes(searchYear));
 
-        if (hasCardNumber && yearMatch) {
-          // EXACT match: player + set + year + card number
+        // Check for parallel/color match
+        const searchParallelLower = (searchParallel || '').toLowerCase();
+        const hasParallel = searchParallelLower && (productName.includes(searchParallelLower) || consoleName.includes(searchParallelLower));
+        const parallelMatch = !searchParallelLower || hasParallel; // Match if no parallel specified or if found
+
+        // Check for autograph match
+        const productIsAuto = productName.includes('auto') || productName.includes('autograph') || productName.includes('signed');
+        const autoMatch = searchIsAuto === productIsAuto; // Both auto or both not auto
+
+        // Skip if autograph mismatch (searching for auto but found non-auto, or vice versa)
+        if (!autoMatch) {
+          continue;
+        }
+
+        // Skip if parallel specified but not found in product
+        if (searchParallelLower && !hasParallel) {
+          continue;
+        }
+
+        if (hasCardNumber && yearMatch && parallelMatch) {
+          // EXACT match: player + set + year + card number + parallel
           product = p;
           console.log('  SportsCardPro: EXACT ' + p['console-name'] + ' - ' + p['product-name']);
           break;
