@@ -333,10 +333,14 @@ export class SportsCardProClient {
       return null;
     }
 
-    if (searchParallel || searchIsAuto) {
-      console.log(`  SportsCardPro: Filters: set=${searchSet || 'any'}, year=${searchYear || 'any'}, parallel=${searchParallel || 'none'}, auto=${searchIsAuto}`);
+    // Card # is REQUIRED for accurate matching - skip if not found
+    if (!searchNumber) {
+      console.log('  SportsCardPro: No card # found in title, skipping (card # required)');
+      return null;
     }
-    console.log(`  SportsCardPro: Searching "${query}"`);
+
+    // Always log what we're searching for
+    console.log(`  SportsCardPro: Searching "${query}" #${searchNumber} ${searchYear || ''} ${searchSet || ''} ${searchParallel || 'base'}`);
 
     try {
       const products = await this.searchCards(query, searchSport);
@@ -396,52 +400,51 @@ export class SportsCardProClient {
         }
         nameMatchCount++;
 
-        // Debug: this product passed brand and name filters
-        console.log(`    Match: "${p['product-name']}" (brand ✓, name ✓)`);
+        // STRICT MATCHING - Card # is KEY, all criteria must match
 
-        // If we have a specific set/brand, require it to match
-        const searchSetLower = (searchSet || '').toLowerCase();
-        if (searchSetLower && !consoleName.includes(searchSetLower) && !productName.includes(searchSetLower)) {
-          continue; // Skip if set doesn't match (e.g., searching Prizm but found Mosaic)
-        }
-
-        // Check for card number match (e.g., "#129" in product name)
+        // 1. REQUIRED: Card number must match exactly (e.g., "#129")
         const hasCardNumber = searchNumber && productName.includes('#' + searchNumber);
+        if (searchNumber && !hasCardNumber) {
+          continue; // Card # is required - skip if doesn't match
+        }
+
+        // 2. REQUIRED: Year must match
         const yearMatch = searchYear && (consoleName.includes(searchYear) || productName.includes(searchYear));
-
-        // Check for parallel/color match
-        const searchParallelLower = (searchParallel || '').toLowerCase();
-        const hasParallel = searchParallelLower && (productName.includes(searchParallelLower) || consoleName.includes(searchParallelLower));
-        const parallelMatch = !searchParallelLower || hasParallel; // Match if no parallel specified or if found
-
-        // Check for autograph match
-        const productIsAuto = productName.includes('auto') || productName.includes('autograph') || productName.includes('signed');
-        const autoMatch = searchIsAuto === productIsAuto; // Both auto or both not auto
-
-        // Skip if autograph mismatch (searching for auto but found non-auto, or vice versa)
-        if (!autoMatch) {
-          continue;
+        if (searchYear && !yearMatch) {
+          continue; // Year is required - skip if doesn't match
         }
 
-        // Skip if parallel specified but not found in product
-        if (searchParallelLower && !hasParallel) {
-          continue;
-        }
-
-        if (hasCardNumber && yearMatch && parallelMatch) {
-          // EXACT match: player + set + year + card number + parallel
-          product = p;
-          console.log('  SportsCardPro: EXACT ' + p['console-name'] + ' - ' + p['product-name']);
-          break;
-        } else if (hasCardNumber || yearMatch) {
-          // Good match
-          if (!product) {
-            product = p;
-            console.log('  SportsCardPro: Match ' + p['console-name'] + ' - ' + p['product-name']);
+        // 3. REQUIRED: Set must match exactly (Panini Prizm ≠ Panini Excalibur)
+        const searchSetLower = (searchSet || '').toLowerCase();
+        if (searchSetLower) {
+          // Check both console-name and product-name for the set
+          const setInConsole = consoleName.includes(searchSetLower);
+          const setInProduct = productName.includes(searchSetLower);
+          if (!setInConsole && !setInProduct) {
+            continue; // Set must match
           }
-        } else if (!product) {
-          product = p; // Fallback
         }
+
+        // 4. Parallel/color must match if specified
+        const searchParallelLower = (searchParallel || '').toLowerCase();
+        if (searchParallelLower) {
+          const hasParallel = productName.includes(searchParallelLower) || consoleName.includes(searchParallelLower);
+          if (!hasParallel) {
+            continue; // Parallel specified but not found
+          }
+        }
+
+        // 5. Autograph status must match
+        const productIsAuto = productName.includes('auto') || productName.includes('autograph') || productName.includes('signed');
+        if (searchIsAuto !== productIsAuto) {
+          continue; // Auto mismatch
+        }
+
+        // ALL CRITERIA MATCHED - this is our product!
+        product = p;
+        console.log(`  SportsCardPro: MATCH ${p['console-name']} - ${p['product-name']}`);
+        console.log(`    Card #${searchNumber || 'any'}, Year ${searchYear || 'any'}, Set ${searchSet || 'any'}, Parallel ${searchParallel || 'base'}`);
+        break;
       }
 
       if (!product) {
