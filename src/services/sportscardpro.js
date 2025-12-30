@@ -424,14 +424,18 @@ export class SportsCardProClient {
       let priceInPennies = null;
       let priceKey = 'loose-price'; // default to ungraded
 
-      console.log("  Grade for pricing: " + searchGrade); if (searchGrade) {
+      console.log("  Grade for pricing: " + searchGrade);
+      if (searchGrade) {
         const gradeUpper = searchGrade.toUpperCase();
-        if (gradeUpper.includes('PSA 10') || gradeUpper.includes('BGS 10') || gradeUpper.includes('GEM')) {
+        // IMPORTANT: Check for specific grades (PSA 9, PSA 10) BEFORE generic terms like "GEM"
+        // This prevents "Gem Mint" without a number from defaulting to PSA 10
+        if (gradeUpper.includes('PSA 9') || gradeUpper.includes('BGS 9') || gradeUpper.includes('BGS 9.5')) {
+          priceKey = 'graded-price'; // PSA 9 / BGS 9 / BGS 9.5
+          priceInPennies = product['graded-price'];
+        } else if (gradeUpper.includes('PSA 10') || gradeUpper.includes('BGS 10') ||
+                   (gradeUpper.includes('GEM') && gradeUpper.includes('10'))) {
           priceKey = 'manual-only-price'; // Top grade (PSA 10/BGS 10)
           priceInPennies = product['manual-only-price'] || product['bgs-10-price'];
-        } else if (gradeUpper.includes('PSA 9') || gradeUpper.includes('BGS 9')) {
-          priceKey = 'graded-price'; // PSA 9 / BGS 9
-          priceInPennies = product['graded-price'];
         } else if (gradeUpper.includes('PSA 8') || gradeUpper.includes('BGS 8')) {
           priceKey = 'new-price'; // PSA 8 / BGS 8.5
           priceInPennies = product['new-price'];
