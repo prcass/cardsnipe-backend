@@ -14,7 +14,8 @@ const hasPSACredentials = process.env.PSA_USERNAME && process.env.PSA_PASSWORD;
 
 export class SportsCardProClient {
   constructor() {
-    this.baseUrl = 'https://www.pricecharting.com';
+    // Use sportscardspro.com for sports cards (pricecharting.com is for video games)
+    this.baseUrl = 'https://www.sportscardspro.com';
     this.token = process.env.SPORTSCARDPRO_TOKEN;
   }
 
