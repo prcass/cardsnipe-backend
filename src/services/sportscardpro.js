@@ -12,6 +12,13 @@ import { cardSets } from './card-sets.js';
 const psa = new PSAClient();
 const hasPSACredentials = process.env.PSA_ACCESS_TOKEN || (process.env.PSA_USERNAME && process.env.PSA_PASSWORD);
 
+// Log PSA status on startup
+if (hasPSACredentials) {
+  console.log('PSA API: Credentials configured ✓');
+} else {
+  console.log('PSA API: No credentials (set PSA_ACCESS_TOKEN or PSA_USERNAME+PSA_PASSWORD)');
+}
+
 export class SportsCardProClient {
   constructor() {
     // Use sportscardspro.com for sports cards (pricecharting.com is for video games)
@@ -257,6 +264,10 @@ export class SportsCardProClient {
     const searchSport = sport;
 
     // PRIORITY: If we have a PSA cert number, look it up for EXACT structured data
+    if (hasPSACredentials && !certNumber) {
+      // Log when we have credentials but no cert - helps debug extraction issues
+      console.log(`  PSA: No cert# found in listing`);
+    }
     if (certNumber && hasPSACredentials) {
       try {
         console.log(`  PSA: Looking up cert #${certNumber}`);
@@ -264,7 +275,7 @@ export class SportsCardProClient {
 
         if (psaData && psaData.PSACert) {
           const cert = psaData.PSACert;
-          console.log(`  PSA: Found ${cert.Year} ${cert.Brand} ${cert.Subject} #${cert.CardNumber} [${cert.Variety || 'Base'}]`);
+          console.log(`  PSA: ${cert.Year} ${cert.Brand} ${cert.Subject} #${cert.CardNumber} [${cert.Variety || 'Base'}]`);
 
           // Use PSA's structured data - much more reliable than title parsing!
           if (cert.Year) searchYear = cert.Year;
@@ -280,9 +291,11 @@ export class SportsCardProClient {
           if (cert.Category && cert.Category.toLowerCase().includes('auto')) {
             searchIsAuto = true;
           }
+        } else {
+          console.log(`  PSA: Cert #${certNumber} not found in database`);
         }
       } catch (e) {
-        console.log(`  PSA lookup failed: ${e.message}`);
+        console.log(`  PSA: Lookup failed - ${e.message}`);
         // Fall back to title parsing
       }
     }
