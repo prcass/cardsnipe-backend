@@ -185,7 +185,8 @@ export class EbayClient {
         year: aspects.year || parsedFromTitle.year,
         setName: aspects.setName || parsedFromTitle.setName,
         cardNumber: aspects.cardNumber || parsedFromTitle.cardNumber,
-        parallel: aspects.parallel || parsedFromTitle.parallel,
+        // For parallel: prefer the MORE SPECIFIC name (title often has "Blue Velocity" while aspects just say "Blue")
+        parallel: this.getBetterParallel(aspects.parallel, parsedFromTitle.parallel),
         playerName: aspects.playerName || parsedFromTitle.playerName,
         grader: aspects.grader || parsedFromTitle.grader,
         grade: aspects.grade || parsedFromTitle.grade,
@@ -194,6 +195,38 @@ export class EbayClient {
         isAuto: aspects.isAuto || parsedFromTitle.isAuto || false,
       };
     });
+  }
+
+  /**
+   * Choose the more specific parallel name between aspects and title parsing
+   * eBay aspects might say "Blue" while title has "Blue Velocity" - prefer the longer/more specific one
+   */
+  getBetterParallel(aspectsParallel, titleParallel) {
+    if (!aspectsParallel && !titleParallel) return null;
+    if (!aspectsParallel) return titleParallel;
+    if (!titleParallel) return aspectsParallel;
+
+    const aspectsLower = aspectsParallel.toLowerCase();
+    const titleLower = titleParallel.toLowerCase();
+
+    // If title parallel contains the aspect parallel, title is more specific
+    // e.g., aspects="blue", title="blue velocity" → use "blue velocity"
+    if (titleLower.includes(aspectsLower) && titleLower.length > aspectsLower.length) {
+      return titleParallel;
+    }
+
+    // If aspect parallel contains the title parallel, aspect is more specific
+    if (aspectsLower.includes(titleLower) && aspectsLower.length > titleLower.length) {
+      return aspectsParallel;
+    }
+
+    // If they're different (not substrings of each other), prefer title parsing
+    // because it uses our curated list of compound parallels
+    if (titleLower !== aspectsLower) {
+      return titleParallel;
+    }
+
+    return aspectsParallel;
   }
 
   /**
