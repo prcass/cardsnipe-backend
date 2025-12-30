@@ -318,8 +318,8 @@ export class SportsCardProClient {
         const productName = (p['product-name'] || '').toLowerCase();
         const consoleName = (p['console-name'] || '').toLowerCase();
 
-        // MUST be actual cards, not Funko POPs
-        if (!consoleName.includes('cards')) {
+        // MUST be actual sports cards, not Funko POPs
+        if (!consoleName.includes('basketball cards') && !consoleName.includes('baseball cards') && !consoleName.includes('football cards')) {
           continue;
         }
 
