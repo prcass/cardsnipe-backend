@@ -6,6 +6,10 @@
  */
 
 import fetch from 'node-fetch';
+import { PSAClient } from './psa.js';
+
+const psa = new PSAClient();
+const hasPSACredentials = process.env.PSA_ACCESS_TOKEN || (process.env.PSA_USERNAME && process.env.PSA_PASSWORD);
 
 export class SportsCardProClient {
   constructor() {
@@ -290,7 +294,7 @@ export class SportsCardProClient {
    * Get market value for a card
    * Searches by title and returns appropriate graded price
    */
-  async getMarketValue({ player, year, set, grade, cardNumber, parallel, imageUrl, sport }) {
+  async getMarketValue({ player, year, set, grade, cardNumber, parallel, imageUrl, sport, certNumber }) {
     let searchYear = year;
     let searchSet = set;
     let searchNumber = cardNumber;
@@ -300,6 +304,37 @@ export class SportsCardProClient {
     let searchIsAuto = false;
     let searchInsertSet = null;  // Insert sets like Splash, Rainmakers, All-Stars
     const searchSport = sport;
+
+    // PRIORITY: If we have a PSA cert number, look it up for EXACT structured data
+    if (certNumber && hasPSACredentials) {
+      try {
+        console.log(`  PSA: Looking up cert #${certNumber}`);
+        const psaData = await psa.getCertInfo(certNumber);
+
+        if (psaData && psaData.PSACert) {
+          const cert = psaData.PSACert;
+          console.log(`  PSA: Found ${cert.Year} ${cert.Brand} ${cert.Subject} #${cert.CardNumber} [${cert.Variety || 'Base'}]`);
+
+          // Use PSA's structured data - much more reliable than title parsing!
+          if (cert.Year) searchYear = cert.Year;
+          if (cert.Brand) searchSet = cert.Brand;
+          if (cert.CardNumber) searchNumber = cert.CardNumber;
+          if (cert.Subject) searchPlayer = cert.Subject;
+          if (cert.CardGrade) searchGrade = `PSA ${cert.CardGrade}`;
+          if (cert.Variety) {
+            // PSA Variety field contains parallel info (e.g., "Blue Wave Prizm", "Silver")
+            searchParallel = cert.Variety.toLowerCase();
+          }
+          // Check if it's an auto from PSA data
+          if (cert.Category && cert.Category.toLowerCase().includes('auto')) {
+            searchIsAuto = true;
+          }
+        }
+      } catch (e) {
+        console.log(`  PSA lookup failed: ${e.message}`);
+        // Fall back to title parsing
+      }
+    }
 
     // Extract grade from title if not provided
     if (!searchGrade && player) {
@@ -315,7 +350,7 @@ export class SportsCardProClient {
       }
     }
 
-    // Parse title for player name, auto status, and insert set
+    // Parse title for player name, auto status, and insert set (fallback if PSA lookup didn't populate)
     if (player && player.length > 30) {
       const parsed = this.parseTitle(player);
       if (!searchYear && parsed.year) searchYear = parsed.year;

@@ -67,7 +67,8 @@ async function getMarketValue(listing, sport) {
       grade: listing.grade,
       cardNumber: listing.cardNumber,  // Card # is KEY for matching
       parallel: listing.parallel,  // Color/variant must match
-      imageUrl: listing.imageUrl,  // For OCR cert extraction
+      imageUrl: listing.imageUrl,
+      certNumber: listing.certNumber,  // PSA cert # for API lookup (most reliable!)
       sport: sport  // For category filtering (basketball, baseball, football)
     });
     // Return null if unknown - don't estimate
