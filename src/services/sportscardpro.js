@@ -192,9 +192,21 @@ export class SportsCardProClient {
     const yearMatch = title.match(/\b(19[89]\d|20[0-2]\d)\b/);
     const year = yearMatch ? yearMatch[1] : null;
 
-    // Extract card number
-    const numMatch = title.match(/#(\d+)/);
-    const cardNumber = numMatch ? numMatch[1] : null;
+    // Extract card number - try multiple patterns
+    let cardNumber = null;
+    const cardNumPatterns = [
+      /#(\d{1,4})\b/,           // #129, #1, #1234
+      /\bNo\.?\s*(\d{1,4})\b/i, // No. 129, No 129
+      /\bCard\s*#?(\d{1,4})\b/i, // Card #129, Card 129
+      /\s(\d{1,4})\/\d+\b/,     // 129/500 (numbered cards)
+    ];
+    for (const pattern of cardNumPatterns) {
+      const match = title.match(pattern);
+      if (match && match[1]) {
+        cardNumber = match[1];
+        break;
+      }
+    }
 
     // Extract common set names
     const sets = ['Prizm', 'Optic', 'Select', 'Mosaic', 'Contenders', 'Hoops', 'Donruss',
@@ -352,16 +364,6 @@ export class SportsCardProClient {
       const firstName = playerParts[0] || '';
       const lastName = playerParts.length > 1 ? playerParts[playerParts.length - 1] : '';
 
-      // Debug: log what we're looking for and first few products
-      console.log(`  Looking for firstName="${firstName}" lastName="${lastName}"`);
-      if (products.length > 0) {
-        console.log('  First 3 products from API:');
-        for (let i = 0; i < Math.min(3, products.length); i++) {
-          const p = products[i];
-          console.log(`    ${i+1}. "${p['console-name']}" - "${p['product-name']}"`);
-        }
-      }
-
       let cardCount = 0;
       let nameMatchCount = 0;
       for (const p of products) {
@@ -380,10 +382,6 @@ export class SportsCardProClient {
           continue;
         }
         cardCount++;
-        // Log first few actual cards found
-        if (cardCount <= 3) {
-          console.log(`    Card ${cardCount}: "${p['console-name']}" - "${p['product-name']}"`);
-        }
 
         // Require BOTH first and last name to be in the product name
         const hasFirstName = firstName && productName.includes(firstName);
