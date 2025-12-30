@@ -427,32 +427,43 @@ export class SportsCardProClient {
         const yearMatch = String(searchYear) === String(scpData.year);
         const setMatch = searchSet.toLowerCase() === (scpData.set || '').toLowerCase();
 
-        // Parallel matching: normalize by removing common suffixes like " prizm"
-        // e.g., "green" should match "green prizm", "silver" should match "silver prizm"
+        // Parallel matching: be STRICT to avoid false matches
+        // "Fast Break Purple" is NOT the same as "Purple Holo" - different parallel lines!
         const normalizeParallel = (p) => {
           if (!p) return '';
           return p.toLowerCase()
-            .replace(/ prizm$/, '')
-            .replace(/ refractor$/, '')
-            .replace(/ holo$/, '')
+            .replace(/ prizm$/, '')  // "green prizm" → "green"
+            .replace(/ refractor$/, '')  // "blue refractor" → "blue"
             .trim();
         };
+
+        // Simple color names (can use flexible matching with these only)
+        const simpleColors = ['silver', 'gold', 'blue', 'red', 'green', 'orange', 'purple', 'pink', 'black', 'white', 'bronze', 'yellow'];
+
         const searchParNorm = normalizeParallel(searchParallel);
         const scpParNorm = normalizeParallel(scpData.parallel);
 
         // Parallel match logic:
         // - Base card (no parallel) should ONLY match base card
-        // - Parallel card should match same parallel (with flexible suffix matching)
+        // - Complex parallels (Fast Break, Velocity, Holo, etc.) require EXACT match
+        // - Simple colors can match with prizm/refractor suffix variations
         let parallelMatch;
         if (!searchParNorm && !scpParNorm) {
           parallelMatch = true;  // Both are base cards
         } else if (!searchParNorm || !scpParNorm) {
           parallelMatch = false;  // One is base, one is parallel - no match
+        } else if (searchParNorm === scpParNorm) {
+          parallelMatch = true;  // Exact match after normalization
+        } else if (simpleColors.includes(searchParNorm) && scpParNorm.endsWith(searchParNorm)) {
+          // Allow "purple" to match "purple" in "fast break purple" only if search is simple color
+          // BUT this is risky - "purple" should NOT match "fast break purple"
+          // Only allow if SCP is just the color with common suffix
+          parallelMatch = simpleColors.includes(scpParNorm) || scpParNorm === searchParNorm;
+        } else if (simpleColors.includes(scpParNorm) && searchParNorm.endsWith(scpParNorm)) {
+          parallelMatch = simpleColors.includes(searchParNorm) || searchParNorm === scpParNorm;
         } else {
-          // Both have parallels - use flexible matching
-          parallelMatch = searchParNorm === scpParNorm ||
-                          scpParNorm.includes(searchParNorm) ||
-                          searchParNorm.includes(scpParNorm);
+          // Complex parallels must match exactly
+          parallelMatch = false;
         }
 
         const autoMatch = searchIsAuto === scpData.isAuto;
