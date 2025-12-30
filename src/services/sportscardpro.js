@@ -222,9 +222,25 @@ export class SportsCardProClient {
     }
 
     // Extract parallel/color variant
-    const parallels = ['silver', 'gold', 'blue', 'red', 'green', 'orange', 'purple', 'pink', 'black', 'white',
-      'holo', 'refractor', 'wave', 'shimmer', 'disco', 'tiger', 'camo', 'ice', 'neon', 'pulsar', 'hyper',
-      'pink ice', 'red ice', 'blue ice', 'green ice', 'purple ice', 'fast break', 'instant impact'];
+    // IMPORTANT: Check multi-word parallels FIRST before single colors
+    // Otherwise "Blue Velocity" matches "Blue" and stops
+    const parallels = [
+      // Multi-word parallels (must check first)
+      'blue velocity', 'red velocity', 'green velocity', 'orange velocity', 'purple velocity',
+      'blue pulsar', 'green pulsar', 'red pulsar', 'orange pulsar', 'purple pulsar',
+      'pink ice', 'red ice', 'blue ice', 'green ice', 'purple ice',
+      'fast break', 'instant impact', 'red white blue', 'black gold',
+      'blue shimmer', 'gold shimmer', 'red shimmer',
+      'blue wave', 'red wave', 'gold wave',
+      'hyper blue', 'hyper pink', 'hyper red',
+      'neon green', 'neon orange', 'neon pink',
+      'tiger camo', 'blue camo', 'green camo',
+      'disco blue', 'disco red', 'disco gold',
+      // Single-word parallels (check after compound names)
+      'silver', 'gold', 'blue', 'red', 'green', 'orange', 'purple', 'pink', 'black', 'white',
+      'holo', 'refractor', 'wave', 'shimmer', 'disco', 'tiger', 'camo', 'ice', 'neon', 'pulsar',
+      'hyper', 'velocity', 'prizm', 'mojo', 'scope', 'fluorescent'
+    ];
     let parallel = null;
     for (const par of parallels) {
       if (titleUpper.includes(par.toUpperCase())) {
