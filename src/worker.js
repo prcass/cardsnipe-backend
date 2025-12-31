@@ -84,7 +84,6 @@ async function getMarketValue(listing, sport) {
       cardNumber: listing.cardNumber,  // Card # is KEY for matching
       parallel: listing.parallel,  // Color/variant must match
       imageUrl: listing.imageUrl,
-      certNumber: listing.certNumber,  // PSA cert # for API lookup (most reliable!)
       sport: sport  // For category filtering (basketball, baseball, football)
     });
     // Return null if unknown - don't estimate
@@ -204,12 +203,16 @@ async function processListings(listings, sport, platform) {
         const card = shortCard(listing);
 
         if (!marketData || !marketData.value) {
+          // Log to scan_log - no market value found
+          logScan(listing, sport, platform, 'rejected', 'no_market_value', null, null);
           return null;
         }
 
         const dealScore = calculateDealScore(listing.currentPrice, marketData.value);
 
         if (dealScore < settings.minDealScore) {
+          // Log to scan_log - deal score too low
+          logScan(listing, sport, platform, 'rejected', `score_${dealScore}%_below_${settings.minDealScore}%`, marketData, dealScore);
           return null;
         }
 
@@ -235,9 +238,13 @@ async function processListings(listings, sport, platform) {
             platform: platform,
             is_active: true
           });
+          // Log to scan_log - saved as deal
+          logScan(listing, sport, platform, 'saved', null, marketData, dealScore);
           console.log(`  DEAL | $${listing.currentPrice} → $${marketData.value} (${dealScore}%) | ${card}`);
           return 1;
         }
+        // Log to scan_log - already exists
+        logScan(listing, sport, platform, 'duplicate', 'already_exists', marketData, dealScore);
         return 0;
       } catch (e) {
         return 0;

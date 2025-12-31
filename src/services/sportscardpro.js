@@ -6,18 +6,7 @@
  */
 
 import fetch from 'node-fetch';
-import { PSAClient } from './psa.js';
 import { cardSets } from './card-sets.js';
-
-const psa = new PSAClient();
-const hasPSACredentials = process.env.PSA_ACCESS_TOKEN || (process.env.PSA_USERNAME && process.env.PSA_PASSWORD);
-
-// Log PSA status on startup
-if (hasPSACredentials) {
-  console.log('PSA API: Credentials configured ✓');
-} else {
-  console.log('PSA API: No credentials (set PSA_ACCESS_TOKEN or PSA_USERNAME+PSA_PASSWORD)');
-}
 
 export class SportsCardProClient {
   constructor() {
@@ -64,6 +53,26 @@ export class SportsCardProClient {
     const parallelMatch = productName.match(/\[([^\]]+)\]/);
     if (parallelMatch) {
       result.parallel = parallelMatch[1].toLowerCase().trim();
+    }
+
+    // Also check console name for parallel indicators (e.g., "2012 Panini Prizm Silver")
+    // This catches cases where parallel is in console name, not brackets
+    if (!result.parallel) {
+      const combined = (consoleName + ' ' + productName).toLowerCase();
+      const parallelIndicators = [
+        'silver prizm', 'gold prizm', 'blue prizm', 'red prizm', 'green prizm',
+        'orange prizm', 'purple prizm', 'pink prizm', 'black prizm',
+        'silver', 'gold', 'blue', 'red', 'green', 'orange', 'purple', 'pink', 'black',
+        'holo', 'refractor', 'mojo', 'shimmer', 'ice', 'wave', 'velocity'
+      ];
+      for (const p of parallelIndicators) {
+        // Check if it's actually a parallel marker, not just part of set name
+        // Skip if it's just "Prizm" in "Panini Prizm" (set name)
+        if (combined.includes(p) && !combined.match(new RegExp(`panini\\s+${p}\\b`))) {
+          result.parallel = p;
+          break;
+        }
+      }
     }
 
     // Extract insert set from console name using CardSets data service
@@ -252,7 +261,7 @@ export class SportsCardProClient {
    * Get market value for a card
    * Searches by title and returns appropriate graded price
    */
-  async getMarketValue({ player, year, set, grade, cardNumber, parallel, imageUrl, sport, certNumber }) {
+  async getMarketValue({ player, year, set, grade, cardNumber, parallel, imageUrl, sport }) {
     let searchYear = year;
     let searchSet = set;
     let searchNumber = cardNumber;
@@ -262,43 +271,6 @@ export class SportsCardProClient {
     let searchIsAuto = false;
     let searchInsertSet = null;  // Insert sets like Splash, Rainmakers, All-Stars
     const searchSport = sport;
-
-    // PRIORITY: If we have a PSA cert number, look it up for EXACT structured data
-    if (hasPSACredentials && !certNumber) {
-      // Log when we have credentials but no cert - helps debug extraction issues
-      console.log(`  PSA: No cert# found in listing`);
-    }
-    if (certNumber && hasPSACredentials) {
-      try {
-        console.log(`  PSA: Looking up cert #${certNumber}`);
-        const psaData = await psa.getCertInfo(certNumber);
-
-        if (psaData && psaData.PSACert) {
-          const cert = psaData.PSACert;
-          console.log(`  PSA: ${cert.Year} ${cert.Brand} ${cert.Subject} #${cert.CardNumber} [${cert.Variety || 'Base'}]`);
-
-          // Use PSA's structured data - much more reliable than title parsing!
-          if (cert.Year) searchYear = cert.Year;
-          if (cert.Brand) searchSet = cert.Brand;
-          if (cert.CardNumber) searchNumber = cert.CardNumber;
-          if (cert.Subject) searchPlayer = cert.Subject;
-          if (cert.CardGrade) searchGrade = `PSA ${cert.CardGrade}`;
-          if (cert.Variety) {
-            // PSA Variety field contains parallel info (e.g., "Blue Wave Prizm", "Silver")
-            searchParallel = cert.Variety.toLowerCase();
-          }
-          // Check if it's an auto from PSA data
-          if (cert.Category && cert.Category.toLowerCase().includes('auto')) {
-            searchIsAuto = true;
-          }
-        } else {
-          console.log(`  PSA: Cert #${certNumber} not found in database`);
-        }
-      } catch (e) {
-        console.log(`  PSA: Lookup failed - ${e.message}`);
-        // Fall back to title parsing
-      }
-    }
 
     // Extract grade from title if not provided
     if (!searchGrade && player) {

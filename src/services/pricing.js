@@ -18,11 +18,9 @@ export class PriceService {
 
   /**
    * Get market value for a card using SportsCardPro
-   * certNumber: PSA certification number for direct API lookup (most accurate)
    */
-  async getMarketValue({ player, year, set, grade, cardNumber, parallel, imageUrl, sport, certNumber }) {
-    // Include certNumber in cache key if available
-    const cacheKey = `${certNumber || ''}:${player}:${year}:${set}:${grade}:${cardNumber || ''}:${parallel || ''}:${sport || ''}`.toLowerCase();
+  async getMarketValue({ player, year, set, grade, cardNumber, parallel, imageUrl, sport }) {
+    const cacheKey = `${player}:${year}:${set}:${grade}:${cardNumber || ''}:${parallel || ''}:${sport || ''}`.toLowerCase();
 
     // Check cache
     const cached = this.cache.get(cacheKey);
@@ -32,12 +30,11 @@ export class PriceService {
 
     let result = null;
 
-    // Use SportsCardPro (with PSA lookup for structured data if certNumber provided)
     if (hasSportsCardProToken) {
       try {
-        result = await sportsCardPro.getMarketValue({ player, year, set, grade, cardNumber, parallel, imageUrl, sport, certNumber });
+        result = await sportsCardPro.getMarketValue({ player, year, set, grade, cardNumber, parallel, imageUrl, sport });
         if (result && result.marketValue) {
-          result.confidence = certNumber ? 'very-high' : 'high';
+          result.confidence = 'high';
         }
       } catch (e) {
         result = { error: e.message };
