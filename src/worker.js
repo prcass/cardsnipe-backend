@@ -189,69 +189,62 @@ async function processListings(listings, sport, platform, playerName) {
   // Increment scan count
   incrementScanCount(matchable.length);  // Don't await - fire and forget for speed
 
-  // Process in parallel batches of 10
+  // Process cards sequentially to respect SportsCardPro rate limits
   let saved = 0;
-  const BATCH_SIZE = 10;
 
-  for (let i = 0; i < matchable.length; i += BATCH_SIZE) {
-    const batch = matchable.slice(i, i + BATCH_SIZE);
+  for (const listing of matchable) {
+    try {
+      const marketData = await getMarketValue(listing, sport, playerName);
+      const card = shortCard(listing);
 
-    const results = await Promise.all(batch.map(async (listing) => {
-      try {
-        const marketData = await getMarketValue(listing, sport, playerName);
-        const card = shortCard(listing);
+      if (!marketData || !marketData.value) {
+        // Log to scan_log with actual error reason
+        const reason = marketData?.error || 'no_market_value';
+        logScan(listing, sport, platform, 'rejected', reason, null, null);
+        continue;
+      }
 
-        if (!marketData || !marketData.value) {
-          // Log to scan_log with actual error reason
-          const reason = marketData?.error || 'no_market_value';
-          logScan(listing, sport, platform, 'rejected', reason, null, null);
-          return null;
-        }
+      const dealScore = calculateDealScore(listing.currentPrice, marketData.value);
 
-        const dealScore = calculateDealScore(listing.currentPrice, marketData.value);
+      if (dealScore < settings.minDealScore) {
+        // Log to scan_log - deal score too low
+        logScan(listing, sport, platform, 'rejected', `score_${dealScore}%_below_${settings.minDealScore}%`, marketData, dealScore);
+        continue;
+      }
 
-        if (dealScore < settings.minDealScore) {
-          // Log to scan_log - deal score too low
-          logScan(listing, sport, platform, 'rejected', `score_${dealScore}%_below_${settings.minDealScore}%`, marketData, dealScore);
-          return null;
-        }
+      const itemId = listing.ebayItemId || (platform + '-' + Date.now() + '-' + Math.random().toString(36).slice(2));
+      const existing = await db('listings').where('ebay_item_id', itemId).first();
 
-        const itemId = listing.ebayItemId || (platform + '-' + Date.now() + '-' + Math.random().toString(36).slice(2));
-        const existing = await db('listings').where('ebay_item_id', itemId).first();
-
-        if (!existing) {
-          await db('listings').insert({
-            ebay_item_id: itemId,
-            sport: sport,
-            title: listing.title,
-            current_price: listing.currentPrice,
-            is_auction: listing.isAuction || false,
-            bid_count: listing.bidCount || 0,
-            grade: listing.grade || 'Raw',
-            market_value: marketData.value,
-            market_value_source: marketData.source,
-            market_value_url: marketData.sourceUrl,
-            market_value_date: marketData.date,
-            deal_score: dealScore,
-            image_url: listing.imageUrl,
-            listing_url: listing.listingUrl,
-            platform: platform,
-            is_active: true
-          });
-          // Log to scan_log - saved as deal
-          logScan(listing, sport, platform, 'saved', null, marketData, dealScore);
-          console.log(`  DEAL | $${listing.currentPrice} → $${marketData.value} (${dealScore}%) | ${card}`);
-          return 1;
-        }
+      if (!existing) {
+        await db('listings').insert({
+          ebay_item_id: itemId,
+          sport: sport,
+          title: listing.title,
+          current_price: listing.currentPrice,
+          is_auction: listing.isAuction || false,
+          bid_count: listing.bidCount || 0,
+          grade: listing.grade || 'Raw',
+          market_value: marketData.value,
+          market_value_source: marketData.source,
+          market_value_url: marketData.sourceUrl,
+          market_value_date: marketData.date,
+          deal_score: dealScore,
+          image_url: listing.imageUrl,
+          listing_url: listing.listingUrl,
+          platform: platform,
+          is_active: true
+        });
+        // Log to scan_log - saved as deal
+        logScan(listing, sport, platform, 'saved', null, marketData, dealScore);
+        console.log(`  DEAL | $${listing.currentPrice} → $${marketData.value} (${dealScore}%) | ${card}`);
+        saved++;
+      } else {
         // Log to scan_log - already exists
         logScan(listing, sport, platform, 'duplicate', 'already_exists', marketData, dealScore);
-        return 0;
-      } catch (e) {
-        return 0;
       }
-    }));
-
-    saved += results.filter(r => r === 1).length;
+    } catch (e) {
+      // Silent fail for individual cards
+    }
   }
 
   return saved;

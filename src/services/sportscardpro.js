@@ -13,6 +13,19 @@ export class SportsCardProClient {
     // Use sportscardspro.com for sports cards (pricecharting.com is for video games)
     this.baseUrl = 'https://www.sportscardspro.com';
     this.token = process.env.SPORTSCARDPRO_TOKEN;
+
+    // Rate limiting: max 2 requests per second to avoid 429 errors
+    this.lastRequestTime = 0;
+    this.minRequestInterval = 500; // 500ms between requests
+  }
+
+  async rateLimit() {
+    const now = Date.now();
+    const timeSinceLastRequest = now - this.lastRequestTime;
+    if (timeSinceLastRequest < this.minRequestInterval) {
+      await new Promise(r => setTimeout(r, this.minRequestInterval - timeSinceLastRequest));
+    }
+    this.lastRequestTime = Date.now();
   }
 
   /**
@@ -117,6 +130,9 @@ export class SportsCardProClient {
     if (!this.token) {
       throw new Error('SPORTSCARDPRO_TOKEN not configured');
     }
+
+    // Rate limit to avoid 429 errors
+    await this.rateLimit();
 
     // Simple query - just the player name
     // API uses OR matching so extra keywords cause false matches
