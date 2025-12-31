@@ -73,11 +73,11 @@ function buildQueries(player) {
   ];
 }
 
-async function getMarketValue(listing, sport) {
+async function getMarketValue(listing, sport, playerName) {
   // Use parsed card details from eBay client for exact matching
   try {
     const result = await pricing.getMarketValue({
-      player: listing.title,  // Full title for player name extraction
+      player: playerName,  // Use the known player name from scanner
       year: listing.year,
       set: listing.setName,  // Use setName from eBay parser (not 'set')
       grade: listing.grade,
@@ -174,7 +174,7 @@ async function incrementScanCount(count) {
   }
 }
 
-async function processListings(listings, sport, platform) {
+async function processListings(listings, sport, platform, playerName) {
   // Listings are already filtered to PSA 9/10 by the eBay client
 
   // Filter by price range
@@ -198,7 +198,7 @@ async function processListings(listings, sport, platform) {
 
     const results = await Promise.all(batch.map(async (listing) => {
       try {
-        const marketData = await getMarketValue(listing, sport);
+        const marketData = await getMarketValue(listing, sport, playerName);
         const card = shortCard(listing);
 
         if (!marketData || !marketData.value) {
@@ -281,7 +281,7 @@ async function scanPlayer(player, sport) {
       }
 
       if (combined.length > 0) {
-        total = await processListings(combined, sport, 'ebay');
+        total = await processListings(combined, sport, 'ebay', player);
       }
     } catch (e) {
       // Silent fail

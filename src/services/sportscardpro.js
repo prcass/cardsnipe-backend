@@ -262,50 +262,16 @@ export class SportsCardProClient {
    * Searches by title and returns appropriate graded price
    */
   async getMarketValue({ player, year, set, grade, cardNumber, parallel, imageUrl, sport }) {
-    let searchYear = year;
-    let searchSet = set;
-    let searchNumber = cardNumber;
-    let searchPlayer = player;
-    let searchGrade = grade;
-    let searchParallel = parallel || null;  // Use passed parallel if provided
-    let searchIsAuto = false;
-    let searchInsertSet = null;  // Insert sets like Splash, Rainmakers, All-Stars
+    // Player name is now passed directly from the scanner (e.g., "Joel Embiid")
+    const searchYear = year;
+    const searchSet = set;
+    const searchNumber = cardNumber;
+    const searchGrade = grade;
+    const searchParallel = parallel || null;
+    const searchIsAuto = false;  // TODO: detect from eBay aspects if needed
+    const searchInsertSet = null;  // TODO: detect from eBay aspects if needed
     const searchSport = sport;
-
-    // Extract grade from title if not provided
-    if (!searchGrade && player) {
-      const titleUpper = player.toUpperCase();
-      if (titleUpper.includes("PSA 10") || titleUpper.includes("GEM MINT")) {
-        searchGrade = "PSA 10";
-      } else if (titleUpper.includes("PSA 9")) {
-        searchGrade = "PSA 9";
-      } else if (titleUpper.includes("BGS 10")) {
-        searchGrade = "BGS 10";
-      } else if (titleUpper.includes("BGS 9")) {
-        searchGrade = "BGS 9";
-      }
-    }
-
-    // Parse title for player name, auto status, and insert set (fallback if PSA lookup didn't populate)
-    if (player && player.length > 30) {
-      const parsed = this.parseTitle(player);
-      if (!searchYear && parsed.year) searchYear = parsed.year;
-      if (!searchSet && parsed.set) searchSet = parsed.set;
-      if (parsed.player) searchPlayer = parsed.player;
-      if (parsed.isAuto) searchIsAuto = parsed.isAuto;
-      if (parsed.insertSet) searchInsertSet = parsed.insertSet;
-    }
-
-    // Extract clean player name from known list
-    const players = ['LeBron James', 'Victor Wembanyama', 'Luka Doncic', 'Anthony Edwards',
-      'Stephen Curry', 'Shohei Ohtani', 'Mike Trout', 'Julio Rodriguez', 'Gunnar Henderson', 'Juan Soto'];
-    let cleanPlayer = searchPlayer;
-    for (const p of players) {
-      if (player && player.toLowerCase().includes(p.toLowerCase())) {
-        cleanPlayer = p;
-        break;
-      }
-    }
+    const cleanPlayer = player;  // Already clean from scanner
 
     // REQUIRED: Must have card number, year, and set to search
     if (!searchNumber) {
