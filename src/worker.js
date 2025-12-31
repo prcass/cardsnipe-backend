@@ -86,9 +86,9 @@ async function getMarketValue(listing, sport) {
       imageUrl: listing.imageUrl,
       sport: sport  // For category filtering (basketball, baseball, football)
     });
-    // Return null if unknown - don't estimate
+    // Return error reason if no market value found
     if (!result || result.source === 'unknown' || !result.marketValue) {
-      return null;
+      return { error: result?.error || 'unknown' };
     }
     // Return full result with source info
     return {
@@ -98,8 +98,7 @@ async function getMarketValue(listing, sport) {
       date: result.lastUpdated
     };
   } catch (e) {
-    console.log('  Price lookup failed: ' + e.message);
-    return null;
+    return { error: e.message };
   }
 }
 
@@ -203,8 +202,9 @@ async function processListings(listings, sport, platform) {
         const card = shortCard(listing);
 
         if (!marketData || !marketData.value) {
-          // Log to scan_log - no market value found
-          logScan(listing, sport, platform, 'rejected', 'no_market_value', null, null);
+          // Log to scan_log with actual error reason
+          const reason = marketData?.error || 'no_market_value';
+          logScan(listing, sport, platform, 'rejected', reason, null, null);
           return null;
         }
 
