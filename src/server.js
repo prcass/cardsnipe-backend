@@ -13,6 +13,8 @@ import crypto from 'crypto';
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import multer from 'multer';
+import { parse } from 'csv-parse/sync';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -201,6 +203,244 @@ app.delete('/api/clear-data', async (req, res) => {
     res.json({ success: true, deleted: deletedListings, scanLogDeleted: deletedScanLog });
   } catch (error) {
     console.error('Error clearing data:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+
+// ============================================
+// PRICE DATA CSV UPLOAD
+// ============================================
+
+// Configure multer for file uploads (in memory)
+const upload = multer({ storage: multer.memoryStorage() });
+
+/**
+ * Parse SportsCardPro product info to extract structured data
+ * Example: console="2024 Panini Prizm", product="LeBron James [Green Pulsar] #130"
+ */
+function parseSCPProduct(consoleName, productName) {
+  const result = {
+    year: null,
+    set: null,
+    cardNumber: null,
+    parallel: null,
+    playerName: null
+  };
+
+  // Extract year from console name (e.g., "2024 Panini Prizm" → 2024)
+  const yearMatch = consoleName.match(/\b(19[89]\d|20[0-2]\d)\b/);
+  if (yearMatch) result.year = yearMatch[1];
+
+  // Extract card number from product name (e.g., "#130" → "130")
+  const cardMatch = productName.match(/#(\d{1,4})\b/);
+  if (cardMatch) result.cardNumber = cardMatch[1];
+
+  // Extract parallel from product name (e.g., "[Green Pulsar]" → "green pulsar")
+  const parallelMatch = productName.match(/\[([^\]]+)\]/);
+  if (parallelMatch) {
+    result.parallel = parallelMatch[1].toLowerCase().trim();
+  }
+
+  // Check console name for parallel indicators (e.g., "2012 Panini Prizm Silver")
+  if (!result.parallel) {
+    const combined = (consoleName + ' ' + productName).toLowerCase();
+    const parallelIndicators = [
+      'silver prizm', 'gold prizm', 'blue prizm', 'red prizm', 'green prizm',
+      'orange prizm', 'purple prizm', 'pink prizm', 'black prizm',
+      'silver', 'gold', 'blue', 'red', 'green', 'orange', 'purple', 'pink', 'black',
+      'holo', 'refractor', 'mojo', 'shimmer', 'ice', 'wave', 'velocity'
+    ];
+    for (const p of parallelIndicators) {
+      if (combined.includes(p) && !combined.match(new RegExp(`panini\\s+${p}\\b`))) {
+        result.parallel = p;
+        break;
+      }
+    }
+  }
+
+  // Extract set from console name
+  const setPatterns = [
+    { pattern: /PRIZM/i, name: 'prizm' },
+    { pattern: /OPTIC/i, name: 'optic' },
+    { pattern: /SELECT/i, name: 'select' },
+    { pattern: /MOSAIC/i, name: 'mosaic' },
+    { pattern: /HOOPS/i, name: 'hoops' },
+    { pattern: /DONRUSS/i, name: 'donruss' },
+    { pattern: /CONTENDERS/i, name: 'contenders' },
+    { pattern: /BOWMAN\s*CHROME/i, name: 'bowman chrome' },
+    { pattern: /TOPPS\s*CHROME/i, name: 'topps chrome' },
+    { pattern: /BOWMAN/i, name: 'bowman' },
+    { pattern: /TOPPS/i, name: 'topps' },
+  ];
+  for (const { pattern, name } of setPatterns) {
+    if (pattern.test(consoleName)) {
+      result.set = name;
+      break;
+    }
+  }
+
+  // Extract player name (everything before [ or #)
+  const playerMatch = productName.match(/^([^[#]+)/);
+  if (playerMatch) {
+    result.playerName = playerMatch[1].trim();
+  }
+
+  return result;
+}
+
+/**
+ * Upload SportsCardPro CSV file
+ * POST /api/price-data/upload
+ */
+app.post('/api/price-data/upload', upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ success: false, error: 'No file uploaded' });
+    }
+
+    const sport = req.body.sport || 'basketball';
+    const sourceFile = req.file.originalname;
+
+    // Parse CSV
+    const csvContent = req.file.buffer.toString('utf-8');
+    const records = parse(csvContent, {
+      columns: true,
+      skip_empty_lines: true,
+      relaxColumnCount: true
+    });
+
+    console.log(`Parsing ${records.length} records from ${sourceFile}`);
+
+    // Clear existing data for this sport (or this file)
+    await db('price_data').where({ sport }).del();
+
+    // Process and insert records in batches
+    const BATCH_SIZE = 500;
+    let inserted = 0;
+
+    for (let i = 0; i < records.length; i += BATCH_SIZE) {
+      const batch = records.slice(i, i + BATCH_SIZE);
+      const rows = [];
+
+      for (const record of batch) {
+        const consoleName = record['console-name'] || '';
+        const productName = record['product-name'] || '';
+
+        // Skip non-card items
+        if (!consoleName || !productName) continue;
+        if (consoleName.toLowerCase().includes('funko')) continue;
+        if (consoleName.toLowerCase().includes('box')) continue;
+
+        const parsed = parseSCPProduct(consoleName, productName);
+
+        // Skip if we can't parse essential info
+        if (!parsed.cardNumber || !parsed.year) continue;
+
+        rows.push({
+          scp_id: record['id'] || null,
+          console_name: consoleName,
+          product_name: productName,
+          sport: sport,
+          year: parsed.year,
+          set_name: parsed.set,
+          card_number: parsed.cardNumber,
+          parallel: parsed.parallel,
+          player_name: parsed.playerName,
+          raw_price: parseInt(record['loose-price']) || null,
+          psa8_price: parseInt(record['new-price']) || null,
+          psa9_price: parseInt(record['graded-price']) || null,
+          psa10_price: parseInt(record['manual-only-price']) || null,
+          bgs10_price: parseInt(record['bgs-10-price']) || null,
+          source_file: sourceFile
+        });
+      }
+
+      if (rows.length > 0) {
+        await db('price_data').insert(rows);
+        inserted += rows.length;
+      }
+    }
+
+    console.log(`Inserted ${inserted} price records for ${sport}`);
+    res.json({ success: true, inserted, sport, file: sourceFile });
+  } catch (error) {
+    console.error('CSV upload error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * Get price data stats
+ * GET /api/price-data/stats
+ */
+app.get('/api/price-data/stats', async (req, res) => {
+  try {
+    const stats = await db('price_data')
+      .select('sport')
+      .count('* as count')
+      .groupBy('sport');
+
+    const bySet = await db('price_data')
+      .select('sport', 'set_name', 'year')
+      .count('* as count')
+      .groupBy('sport', 'set_name', 'year')
+      .orderBy([{ column: 'sport' }, { column: 'year', order: 'desc' }]);
+
+    res.json({ success: true, bySport: stats, bySet });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * Clear price data
+ * DELETE /api/price-data
+ */
+app.delete('/api/price-data', async (req, res) => {
+  try {
+    const sport = req.query.sport;
+    let deleted;
+    if (sport) {
+      deleted = await db('price_data').where({ sport }).del();
+    } else {
+      deleted = await db('price_data').del();
+    }
+    res.json({ success: true, deleted });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * Lookup price for a specific card
+ * GET /api/price-data/lookup
+ */
+app.get('/api/price-data/lookup', async (req, res) => {
+  try {
+    const { year, set, cardNumber, parallel, sport } = req.query;
+
+    let query = db('price_data');
+
+    if (year) query = query.where('year', year);
+    if (set) query = query.whereRaw('LOWER(set_name) = ?', [set.toLowerCase()]);
+    if (cardNumber) query = query.where('card_number', cardNumber);
+    if (sport) query = query.where('sport', sport);
+
+    // Parallel matching - flexible
+    if (parallel) {
+      query = query.where(function() {
+        this.whereRaw('LOWER(parallel) = ?', [parallel.toLowerCase()])
+          .orWhereRaw('LOWER(parallel) LIKE ?', [parallel.toLowerCase() + '%'])
+          .orWhereRaw('? LIKE LOWER(parallel) || \'%\'', [parallel.toLowerCase()]);
+      });
+    } else {
+      query = query.whereNull('parallel');
+    }
+
+    const results = await query.limit(5);
+    res.json({ success: true, results });
+  } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
 });

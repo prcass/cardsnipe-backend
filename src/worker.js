@@ -9,14 +9,17 @@ import { EbayClient } from './services/ebay.js';
 import { COMCClient } from './services/comc.js';
 import { Scraper130Point } from './services/scraper130point.js';
 import { PriceService } from './services/pricing.js';
+import { LocalPricingService } from './services/local-pricing.js';
 import { db } from './db/index.js';
 
 const ebay = new EbayClient();
 const comc = new COMCClient();
 const scraper130 = new Scraper130Point();
 const pricing = new PriceService();
+const localPricing = new LocalPricingService();
 
 const hasEbayKeys = process.env.EBAY_CLIENT_ID && process.env.EBAY_CLIENT_SECRET;
+let useLocalPricing = false;  // Will be set on startup
 
 // Default settings (can be overridden via API)
 let settings = {
@@ -74,18 +77,33 @@ function buildQueries(player) {
 }
 
 async function getMarketValue(listing, sport, playerName) {
-  // Use parsed card details from eBay client for exact matching
   try {
-    const result = await pricing.getMarketValue({
-      player: playerName,  // Use the known player name from scanner
-      year: listing.year,
-      set: listing.setName,  // Use setName from eBay parser (not 'set')
-      grade: listing.grade,
-      cardNumber: listing.cardNumber,  // Card # is KEY for matching
-      parallel: listing.parallel,  // Color/variant must match
-      imageUrl: listing.imageUrl,
-      sport: sport  // For category filtering (basketball, baseball, football)
-    });
+    let result;
+
+    // Use local pricing if available (much faster, no rate limits!)
+    if (useLocalPricing) {
+      result = await localPricing.getMarketValue({
+        year: listing.year,
+        set: listing.setName,
+        grade: listing.grade,
+        cardNumber: listing.cardNumber,
+        parallel: listing.parallel,
+        sport: sport
+      });
+    } else {
+      // Fall back to API-based pricing
+      result = await pricing.getMarketValue({
+        player: playerName,
+        year: listing.year,
+        set: listing.setName,
+        grade: listing.grade,
+        cardNumber: listing.cardNumber,
+        parallel: listing.parallel,
+        imageUrl: listing.imageUrl,
+        sport: sport
+      });
+    }
+
     // Return error reason if no market value found
     if (!result || result.source === 'unknown' || !result.marketValue) {
       return { error: result?.error || 'unknown' };
@@ -288,12 +306,26 @@ async function runWorker() {
   console.log('CardSnipe Worker | Source: eBay' + (hasEbayKeys ? '' : ' (no keys configured!)'));
   console.log('SERVER_URL: ' + (process.env.SERVER_URL || 'NOT SET (using localhost:3001)'));
 
+  // Check if local pricing data is available
+  try {
+    const hasLocalData = await localPricing.hasData();
+    useLocalPricing = hasLocalData;
+    console.log('Pricing: ' + (useLocalPricing ? 'LOCAL DATABASE (fast!)' : 'SportsCardPro API (rate limited)'));
+  } catch (e) {
+    console.log('Pricing: SportsCardPro API (rate limited)');
+  }
+
   while (true) {
     try {
       await fetchSettings();
       const monitoredPlayers = await getMonitoredPlayers();
 
-      console.log('\n=== SCAN ' + new Date().toLocaleTimeString() + ' ===');
+      // Re-check local pricing availability each cycle
+      try {
+        useLocalPricing = await localPricing.hasData();
+      } catch (e) {}
+
+      console.log('\n=== SCAN ' + new Date().toLocaleTimeString() + (useLocalPricing ? ' [LOCAL]' : ' [API]') + ' ===');
       let totalNew = 0;
 
       if (monitoredPlayers.basketball.length > 0) {
