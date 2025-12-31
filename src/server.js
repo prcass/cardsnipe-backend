@@ -177,8 +177,23 @@ app.post('/api/watchlist', async (req, res) => {
 // Clear all listings (for removing demo/test data)
 app.delete('/api/clear-data', async (req, res) => {
   try {
-    const deletedListings = await db('listings').del();
-    const deletedScanLog = await db('scan_log').del();
+    let deletedListings = 0;
+    let deletedScanLog = 0;
+
+    // Delete listings
+    try {
+      deletedListings = await db('listings').del();
+    } catch (e) {
+      console.log('Could not clear listings:', e.message);
+    }
+
+    // Delete scan_log (table might not exist in older deployments)
+    try {
+      deletedScanLog = await db('scan_log').del();
+    } catch (e) {
+      console.log('Could not clear scan_log:', e.message);
+    }
+
     // Reset scan counter
     scanCounter.total = 0;
     scanCounter.lastReset = new Date();

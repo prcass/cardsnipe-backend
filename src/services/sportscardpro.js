@@ -14,9 +14,9 @@ export class SportsCardProClient {
     this.baseUrl = 'https://www.sportscardspro.com';
     this.token = process.env.SPORTSCARDPRO_TOKEN;
 
-    // Rate limiting: max 2 requests per second to avoid 429 errors
+    // Rate limiting: max 1 request per second to avoid 429 errors
     this.lastRequestTime = 0;
-    this.minRequestInterval = 500; // 500ms between requests
+    this.minRequestInterval = 1000; // 1 second between requests
   }
 
   async rateLimit() {
@@ -342,14 +342,13 @@ export class SportsCardProClient {
         const yearMatch = String(searchYear) === String(scpData.year);
         const setMatch = searchSet.toLowerCase() === (scpData.set || '').toLowerCase();
 
-        // Parallel matching: be STRICT to avoid false matches
-        // "Orange Prizm" is different from "Orange" - do NOT strip suffixes!
+        // Parallel matching: flexible for color + suffix variations
         const normalizeParallel = (p) => {
           if (!p) return '';
           return p.toLowerCase().trim();
         };
 
-        // Simple color names (can use flexible matching with these only)
+        // Simple color names that can match with prizm/refractor suffixes
         const simpleColors = ['silver', 'gold', 'blue', 'red', 'green', 'orange', 'purple', 'pink', 'black', 'white', 'bronze', 'yellow'];
 
         const searchParNorm = normalizeParallel(searchParallel);
@@ -357,25 +356,29 @@ export class SportsCardProClient {
 
         // Parallel match logic:
         // - Base card (no parallel) should ONLY match base card
-        // - Complex parallels (Fast Break, Velocity, Holo, etc.) require EXACT match
-        // - Simple colors can match with prizm/refractor suffix variations
+        // - "silver" matches "silver prizm" (color + common suffix)
+        // - "silver prizm" matches "silver" (color + common suffix)
+        // - "fast break" should NOT match "fast break purple" (different parallel)
         let parallelMatch;
         if (!searchParNorm && !scpParNorm) {
           parallelMatch = true;  // Both are base cards
         } else if (!searchParNorm || !scpParNorm) {
           parallelMatch = false;  // One is base, one is parallel - no match
         } else if (searchParNorm === scpParNorm) {
-          parallelMatch = true;  // Exact match after normalization
-        } else if (simpleColors.includes(searchParNorm) && scpParNorm.endsWith(searchParNorm)) {
-          // Allow "purple" to match "purple" in "fast break purple" only if search is simple color
-          // BUT this is risky - "purple" should NOT match "fast break purple"
-          // Only allow if SCP is just the color with common suffix
-          parallelMatch = simpleColors.includes(scpParNorm) || scpParNorm === searchParNorm;
-        } else if (simpleColors.includes(scpParNorm) && searchParNorm.endsWith(scpParNorm)) {
-          parallelMatch = simpleColors.includes(searchParNorm) || searchParNorm === scpParNorm;
+          parallelMatch = true;  // Exact match
         } else {
-          // Complex parallels must match exactly
-          parallelMatch = false;
+          // Check if one starts with the other (e.g., "silver" vs "silver prizm")
+          const searchStartsWithScp = searchParNorm.startsWith(scpParNorm);
+          const scpStartsWithSearch = scpParNorm.startsWith(searchParNorm);
+
+          if (searchStartsWithScp || scpStartsWithSearch) {
+            // One is a prefix of the other - likely same parallel with different naming
+            // e.g., "silver" vs "silver prizm", "green" vs "green refractor"
+            parallelMatch = true;
+          } else {
+            // Completely different parallels
+            parallelMatch = false;
+          }
         }
 
         const autoMatch = searchIsAuto === scpData.isAuto;

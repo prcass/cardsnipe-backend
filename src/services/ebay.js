@@ -378,18 +378,23 @@ export class EbayClient {
 
     // Detect parallels - IMPORTANT: Check multi-word parallels FIRST before single colors
     const parallels = [
-      // Multi-word parallels (must check first)
+      // Multi-word parallels (must check first - more specific)
       'RED/WHITE/BLUE', 'RED WHITE BLUE', 'RED, WHITE, BLUE',
+      'SILVER PRIZM', 'GOLD PRIZM', 'BLUE PRIZM', 'RED PRIZM', 'GREEN PRIZM',
+      'ORANGE PRIZM', 'PURPLE PRIZM', 'PINK PRIZM', 'BLACK PRIZM',
       'BLUE VELOCITY', 'RED VELOCITY', 'GREEN VELOCITY', 'ORANGE VELOCITY', 'PURPLE VELOCITY',
       'BLUE PULSAR', 'GREEN PULSAR', 'RED PULSAR', 'ORANGE PULSAR', 'PURPLE PULSAR',
-      'PINK ICE', 'RED ICE', 'BLUE ICE', 'GREEN ICE', 'PURPLE ICE',
+      'PINK ICE', 'RED ICE', 'BLUE ICE', 'GREEN ICE', 'PURPLE ICE', 'ORANGE ICE',
       'FAST BREAK', 'BLACK GOLD', 'BLUE SHIMMER', 'GOLD SHIMMER', 'RED SHIMMER',
       'BLUE WAVE', 'RED WAVE', 'GOLD WAVE', 'HYPER BLUE', 'HYPER PINK', 'HYPER RED',
       'NEON GREEN', 'NEON ORANGE', 'NEON PINK', 'TIGER CAMO',
+      'GREEN REFRACTOR', 'BLUE REFRACTOR', 'GOLD REFRACTOR', 'RED REFRACTOR',
+      'CRACKED ICE', 'TIE DYE', 'CHECKERBOARD',
       // Single-word parallels (check after compound names)
-      'SILVER', 'GOLD', 'BLUE', 'RED', 'GREEN', 'ORANGE', 'PURPLE', 'BLACK', 'PINK', 'WHITE',
+      // NOTE: Removed 'PRIZM' - that's usually a set name, not a parallel
+      'SILVER', 'GOLD', 'BRONZE',
       'SHIMMER', 'HOLO', 'REFRACTOR', 'MOJO', 'SCOPE', 'WAVE', 'PULSAR', 'HYPER',
-      'DISCO', 'TIGER', 'CAMO', 'ICE', 'NEON', 'LASER', 'VELOCITY', 'PRIZM'
+      'DISCO', 'TIGER', 'CAMO', 'ICE', 'NEON', 'LASER', 'VELOCITY'
     ];
     for (const parallel of parallels) {
       if (titleUpper.includes(parallel)) {
