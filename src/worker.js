@@ -65,13 +65,11 @@ async function getMonitoredPlayers() {
 }
 
 function buildQueries(player) {
-  // Only search for PSA 9 and PSA 10 graded cards
+  // Simplified queries for speed - just PSA 10 and PSA 9
   const year = settings.cardYear ? settings.cardYear + ' ' : '';
   return [
     year + player + ' PSA 10',
-    year + player + ' PSA 9',
-    year + player + ' Prizm PSA 10',
-    year + player + ' Prizm PSA 9'
+    year + player + ' PSA 9'
   ];
 }
 
@@ -180,76 +178,75 @@ async function incrementScanCount(count) {
 
 async function processListings(listings, sport, platform) {
   // Listings are already filtered to PSA 9/10 by the eBay client
-  console.log(`  [${platform}] Received ${listings.length} PSA 9/10 cards`);
 
   // Filter by price range
   const inPriceRange = listings.filter(l => l.currentPrice >= settings.minPrice && l.currentPrice <= settings.maxPrice);
-  const outOfRange = listings.filter(l => l.currentPrice < settings.minPrice || l.currentPrice > settings.maxPrice);
 
-  console.log(`  [${platform}] ${inPriceRange.length} in price range ($${settings.minPrice}-$${settings.maxPrice}), ${outOfRange.length} outside`);
+  // Skip cards missing essential info (no card # = can't match)
+  const matchable = inPriceRange.filter(l => l.cardNumber && l.setName);
+  const skipped = inPriceRange.length - matchable.length;
 
-  // Increment scan count for qualified cards (PSA 9/10 + in price range)
-  // These are the cards we're actually examining for deals
-  await incrementScanCount(inPriceRange.length);
+  console.log(`  [${platform}] ${listings.length} cards → ${matchable.length} matchable (${skipped} missing card#/set)`);
 
-  // Silently log out-of-range as rejected (don't log to scan_log, just skip)
-  // We only care about qualified candidates in the scan log
+  // Increment scan count
+  incrementScanCount(matchable.length);  // Don't await - fire and forget for speed
 
+  // Process in parallel batches of 10
   let saved = 0;
-  for (const listing of inPriceRange) {
-    try {
-      const marketData = await getMarketValue(listing, sport);
-      const card = shortCard(listing);
+  const BATCH_SIZE = 10;
 
-      // Skip if market value unknown
-      if (!marketData || !marketData.value) {
-        const reason = marketData?.error || 'no match';
-        console.log(`  SKIP | $${listing.currentPrice} | ${card} | ${reason}`);
-        await logScan(listing, sport, platform, 'rejected', reason, null, null);
-        continue;
+  for (let i = 0; i < matchable.length; i += BATCH_SIZE) {
+    const batch = matchable.slice(i, i + BATCH_SIZE);
+
+    const results = await Promise.all(batch.map(async (listing) => {
+      try {
+        const marketData = await getMarketValue(listing, sport);
+        const card = shortCard(listing);
+
+        if (!marketData || !marketData.value) {
+          return null;
+        }
+
+        const dealScore = calculateDealScore(listing.currentPrice, marketData.value);
+
+        if (dealScore < settings.minDealScore) {
+          return null;
+        }
+
+        const itemId = listing.ebayItemId || (platform + '-' + Date.now() + '-' + Math.random().toString(36).slice(2));
+        const existing = await db('listings').where('ebay_item_id', itemId).first();
+
+        if (!existing) {
+          await db('listings').insert({
+            ebay_item_id: itemId,
+            sport: sport,
+            title: listing.title,
+            current_price: listing.currentPrice,
+            is_auction: listing.isAuction || false,
+            bid_count: listing.bidCount || 0,
+            grade: listing.grade || 'Raw',
+            market_value: marketData.value,
+            market_value_source: marketData.source,
+            market_value_url: marketData.sourceUrl,
+            market_value_date: marketData.date,
+            deal_score: dealScore,
+            image_url: listing.imageUrl,
+            listing_url: listing.listingUrl,
+            platform: platform,
+            is_active: true
+          });
+          console.log(`  DEAL | $${listing.currentPrice} → $${marketData.value} (${dealScore}%) | ${card}`);
+          return 1;
+        }
+        return 0;
+      } catch (e) {
+        return 0;
       }
+    }));
 
-      const dealScore = calculateDealScore(listing.currentPrice, marketData.value);
-      const matchedTo = marketData.matchedTo || marketData.productName || '';
-
-      if (dealScore < settings.minDealScore) {
-        console.log(`  SKIP | $${listing.currentPrice} → $${marketData.value} (${dealScore}%) | ${card} | score < ${settings.minDealScore}%`);
-        await logScan(listing, sport, platform, 'rejected', `score ${dealScore}% < min ${settings.minDealScore}%`, marketData, dealScore);
-        continue;
-      }
-
-      const itemId = listing.ebayItemId || (platform + '-' + Date.now() + '-' + Math.random().toString(36).slice(2));
-      const existing = await db('listings').where('ebay_item_id', itemId).first();
-
-      if (!existing) {
-        await db('listings').insert({
-          ebay_item_id: itemId,
-          sport: sport,
-          title: listing.title,
-          current_price: listing.currentPrice,
-          is_auction: listing.isAuction || false,
-          bid_count: listing.bidCount || 0,
-          grade: listing.grade || 'Raw',
-          market_value: marketData.value,
-          market_value_source: marketData.source,
-          market_value_url: marketData.sourceUrl,
-          market_value_date: marketData.date,
-          deal_score: dealScore,
-          image_url: listing.imageUrl,
-          listing_url: listing.listingUrl,
-          platform: platform,
-          is_active: true
-        });
-        saved++;
-        console.log(`  DEAL | $${listing.currentPrice} → $${marketData.value} (${dealScore}%) | ${card} → ${matchedTo}`);
-        await logScan(listing, sport, platform, 'saved', null, marketData, dealScore);
-      } else {
-        await logScan(listing, sport, platform, 'matched', 'already exists', marketData, dealScore);
-      }
-    } catch (e) {
-      await logScan(listing, sport, platform, 'rejected', 'error: ' + e.message, null, null);
-    }
+    saved += results.filter(r => r === 1).length;
   }
+
   return saved;
 }
 
@@ -257,31 +254,33 @@ async function scanPlayer(player, sport) {
   const queries = buildQueries(player);
   let total = 0;
 
-  for (const query of queries) {
-    // Try eBay if credentials are configured
-    if (hasEbayKeys) {
-      try {
-        const listings = await ebay.searchListings({ query, sport, limit: 20, maxPrice: settings.maxPrice });
-        if (listings.length > 0) {
-          total += await processListings(listings, sport, 'ebay');
-        }
-        await new Promise(r => setTimeout(r, 2000));
-      } catch (e) {
-        // Silent fail
-      }
-    }
+  // Run both queries in parallel for speed
+  if (hasEbayKeys) {
+    try {
+      const allListings = await Promise.all(
+        queries.map(query => ebay.searchListings({ query, sport, limit: 20, maxPrice: settings.maxPrice }).catch(() => []))
+      );
 
-    // COMC disabled for now - uncomment to re-enable
-    // try {
-    //   const listings = await comc.searchListings({ query, sport, limit: 15 });
-    //   if (listings.length > 0) {
-    //     total += await processListings(listings, sport, 'comc');
-    //   }
-    //   await new Promise(r => setTimeout(r, 3000));
-    // } catch (e) {
-    //   // Silent fail
-    // }
+      // Combine and dedupe by itemId
+      const seen = new Set();
+      const combined = [];
+      for (const listings of allListings) {
+        for (const l of listings) {
+          if (!seen.has(l.ebayItemId)) {
+            seen.add(l.ebayItemId);
+            combined.push(l);
+          }
+        }
+      }
+
+      if (combined.length > 0) {
+        total = await processListings(combined, sport, 'ebay');
+      }
+    } catch (e) {
+      // Silent fail
+    }
   }
+
   return total;
 }
 
